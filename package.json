@@ -1,0 +1,36 @@
+{
+  "name": "llm-persona-sandbox",
+  "version": "0.1.0",
+  "description": "2ch風掲示板で複数のAIキャラクターが自動的にレスを生成するサンドボックス環境",
+  "main": "src/index.tsx",
+  "scripts": {
+    "dev": "nodemon --exec tsx src/index.tsx",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src/**/*.{ts,tsx}",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "llm",
+    "persona",
+    "chatbot",
+    "2ch",
+    "ollama"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^4.0.0",
+    "pg": "^8.0.0",
+    "@hono/node-server": "^1.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "nodemon": "^3.0.0",
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
+  }
+}

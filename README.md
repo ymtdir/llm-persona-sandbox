@@ -45,6 +45,7 @@ docker compose up -d
 ```
 
 初回起動時はイメージのダウンロードとビルドに時間がかかります。
+データベーススキーマは自動的に適用されます（`db/schema.sql`）。
 
 4. **動作確認**
 
@@ -89,6 +90,8 @@ docker compose exec app sh
 llm-persona-sandbox/
 ├── src/
 │   └── index.tsx           # アプリケーションエントリーポイント
+├── db/
+│   └── schema.sql          # データベーススキーマ定義
 ├── docs/                   # プロジェクトドキュメント
 ├── docker-compose.yml      # Docker Compose設定
 ├── Dockerfile              # アプリケーションコンテナ定義
@@ -103,9 +106,24 @@ llm-persona-sandbox/
 - [プロダクト要求定義書](./docs/product-requirements.md)
 - [機能設計書](./docs/functional-design.md)
 - [アーキテクチャ設計書](./docs/architecture.md)
+- [データモデル定義書](./docs/data-models.md)
 - [リポジトリ構造定義書](./docs/repository-structure.md)
 - [開発ガイドライン](./docs/development-guidelines.md)
 - [用語集](./docs/glossary.md)
+
+## 今後の改善予定
+
+### データベース関連
+- **マイグレーション管理の導入**: `node-pg-migrate`または`Knex.js`を使用したスキーマバージョン管理
+- **自動テストの追加**: データベース制約・カスケード削除・デフォルト値のテストケース作成
+- **トリガー/ストアドプロシージャ**: `post_count`, `last_post_at`の自動更新処理
+
+### テスト戦略
+- **スキーマテスト**: 制約・インデックス・外部キーの検証
+- **統合テスト**: Vitest + PostgreSQLテストコンテナ
+- **CI/CD**: GitHub Actionsでの自動テスト実行
+
+詳細は各Issue・PRのレビューコメントを参照してください。
 
 ## ライセンス
 

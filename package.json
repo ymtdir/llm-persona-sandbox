@@ -1,13 +1,17 @@
 {
   "name": "llm-persona-sandbox",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "2ch風掲示板で複数のAIキャラクターが自動的にレスを生成するサンドボックス環境",
-  "main": "src/index.tsx",
+  "type": "module",
   "scripts": {
-    "dev": "nodemon --exec tsx src/index.tsx",
+    "dev": "tsx watch src/index.tsx",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint src/**/*.{ts,tsx}",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -20,17 +24,22 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "hono": "^4.0.0",
-    "pg": "^8.0.0",
-    "@hono/node-server": "^1.0.0"
+    "hono": "^4.7.9",
+    "@hono/node-server": "^1.14.1",
+    "zod": "^3.24.1",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
-    "tsx": "^4.0.0",
-    "nodemon": "^3.0.0",
-    "typescript": "^5.3.0",
-    "@types/node": "^20.0.0",
-    "@types/pg": "^8.0.0",
-    "eslint": "^9.0.0",
-    "prettier": "^3.0.0"
+    "typescript": "~5.3.0",
+    "tsx": "^4.19.2",
+    "@types/node": "^20.17.10",
+    "@types/pg": "^8.11.10",
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "typescript-eslint": "^8.19.1",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8"
   }
 }

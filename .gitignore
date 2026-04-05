@@ -1,3 +1,6 @@
+# ローカル設定ファイル
+settings.local.json
+
 # 依存関係
 node_modules/
 

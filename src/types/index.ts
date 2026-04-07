@@ -169,3 +169,65 @@ export interface CreatePostData {
    */
   isUserPost?: boolean;
 }
+
+/**
+ * Ollama APIチャットメッセージ
+ */
+export interface ChatMessage {
+  /**
+   * メッセージのロール
+   * - system: システムプロンプト（キャラクター定義）
+   * - user: ユーザープロンプト（スレッド履歴 + 最新投稿）
+   */
+  role: 'system' | 'user' | 'assistant';
+
+  /**
+   * メッセージ内容
+   */
+  content: string;
+}
+
+/**
+ * Ollama APIチャットオプション
+ */
+export interface ChatOptions {
+  /**
+   * 生成時の温度パラメータ（0.0-1.0）
+   * 低いほど確定的、高いほど創造的
+   */
+  temperature?: number;
+
+  /**
+   * 生成する最大トークン数
+   * デフォルト: 200（5chレスの平均的な長さ）
+   */
+  num_predict?: number;
+}
+
+/**
+ * Ollama APIチャット補完レスポンス
+ */
+export interface ChatResponse {
+  /**
+   * 生成されたメッセージ
+   */
+  message: {
+    role: 'assistant';
+    content: string;
+  };
+
+  /**
+   * レスポンス完了フラグ
+   */
+  done: boolean;
+
+  /**
+   * 生成にかかった時間（ナノ秒）
+   */
+  total_duration?: number;
+
+  /**
+   * プロンプト評価時間（ナノ秒）
+   */
+  prompt_eval_duration?: number;
+}

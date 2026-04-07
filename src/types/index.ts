@@ -54,3 +54,83 @@ export interface Character {
    */
   frequency: number;
 }
+
+/**
+ * スレッド情報
+ */
+export interface Thread {
+  /**
+   * スレッドID（UUID v4形式）
+   */
+  id: string;
+
+  /**
+   * スレッドタイトル（1-100文字）
+   */
+  title: string;
+
+  /**
+   * 作成日時
+   */
+  createdAt: Date;
+
+  /**
+   * 最終レス日時
+   */
+  lastPostAt: Date;
+
+  /**
+   * レス数（0以上）
+   */
+  postCount: number;
+}
+
+/**
+ * レス（投稿）情報
+ */
+export interface Post {
+  /**
+   * レスID（自動採番）
+   */
+  id: number;
+
+  /**
+   * スレッドID（外部キー）
+   */
+  threadId: string;
+
+  /**
+   * レス番号（スレッド内で1から開始）
+   */
+  postNumber: number;
+
+  /**
+   * 投稿者名（デフォルト: "名無しさん"）
+   */
+  authorName: string;
+
+  /**
+   * キャラクターID（ユーザー投稿の場合はnull）
+   */
+  characterId: string | null;
+
+  /**
+   * 投稿内容（1-2000文字）
+   */
+  content: string;
+
+  /**
+   * アンカー情報（カンマ区切り: "1,2,5"）
+   */
+  anchors: string | null;
+
+  /**
+   * ユーザー投稿フラグ（true: ユーザー, false: AI）
+   */
+  isUserPost: boolean;
+
+  /**
+   * 作成日時
+   */
+  createdAt: Date;
+}

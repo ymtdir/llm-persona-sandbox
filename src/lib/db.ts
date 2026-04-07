@@ -1,6 +1,8 @@
 import pg from 'pg';
 
-const { Pool, PoolClient } = pg;
+const { Pool } = pg;
+
+type PoolClient = pg.PoolClient;
 
 /**
  * DatabaseClient
@@ -49,9 +51,9 @@ export class DatabaseClient {
    *   [threadId]
    * );
    */
-  async query<T = any>(
+  async query<T extends pg.QueryResultRow = pg.QueryResultRow>(
     sql: string,
-    params: any[] = []
+    params: unknown[] = []
   ): Promise<pg.QueryResult<T>> {
     const start = Date.now();
 

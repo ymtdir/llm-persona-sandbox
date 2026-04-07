@@ -1,24 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DatabaseClient } from '../../src/lib/db';
-import pg from 'pg';
 
 // pg モジュールのモック
 vi.mock('pg', () => {
-  const mockPool = {
+  const mockPoolInstance = {
     query: vi.fn(),
     connect: vi.fn(),
     end: vi.fn(),
     on: vi.fn(),
   };
 
-  const mockClient = {
+  const mockClientInstance = {
     query: vi.fn(),
     release: vi.fn(),
   };
 
+  const MockPool = vi.fn(() => mockPoolInstance);
+
+  // Export mocks for test access
+  MockPool.mockPoolInstance = mockPoolInstance;
+  MockPool.mockClientInstance = mockClientInstance;
+
   return {
     default: {
-      Pool: vi.fn(() => mockPool),
+      Pool: MockPool,
       PoolClient: vi.fn(),
     },
   };
@@ -26,27 +31,35 @@ vi.mock('pg', () => {
 
 describe('DatabaseClient', () => {
   let db: DatabaseClient;
-  let mockPool: any;
-  let mockClient: any;
+  let mockPoolInstance: any;
+  let mockClientInstance: any;
+  let MockPool: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // 環境変数を設定
     process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/testdb';
 
     // モックのリセット
     vi.clearAllMocks();
 
-    // モッククライアントの作成
-    mockClient = {
-      query: vi.fn(),
-      release: vi.fn(),
-    };
+    // pg モジュールからモックインスタンスを取得
+    const pg = await import('pg');
+    MockPool = (pg as any).default.Pool;
+    mockPoolInstance = MockPool.mockPoolInstance;
+    mockClientInstance = MockPool.mockClientInstance;
 
-    // モックプールの取得
-    const Pool = (pg as any).default.Pool;
+    // モックのリセット
+    mockPoolInstance.query.mockReset();
+    mockPoolInstance.connect.mockReset();
+    mockPoolInstance.end.mockReset();
+    mockPoolInstance.on.mockReset();
+    mockClientInstance.query.mockReset();
+    mockClientInstance.release.mockReset();
+
+    // モックの初期設定
+    mockPoolInstance.connect.mockResolvedValue(mockClientInstance);
+
     db = new DatabaseClient();
-    mockPool = Pool.mock.results[0].value;
-    mockPool.connect.mockResolvedValue(mockClient);
   });
 
   afterEach(() => {
@@ -62,8 +75,7 @@ describe('DatabaseClient', () => {
     });
 
     it('should initialize pool with connection string', () => {
-      const Pool = (pg as any).default.Pool;
-      expect(Pool).toHaveBeenCalledWith(
+      expect(MockPool).toHaveBeenCalledWith(
         expect.objectContaining({
           connectionString: 'postgresql://user:pass@localhost:5432/testdb',
           max: 20,
@@ -74,15 +86,14 @@ describe('DatabaseClient', () => {
     });
 
     it('should set up error handler on pool', () => {
-      expect(mockPool.on).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(mockPoolInstance.on).toHaveBeenCalledWith('error', expect.any(Function));
     });
 
     it('should accept connection string as parameter', () => {
       const customUrl = 'postgresql://custom:pass@localhost:5432/customdb';
       const customDb = new DatabaseClient(customUrl);
 
-      const Pool = (pg as any).default.Pool;
-      const lastCall = Pool.mock.calls[Pool.mock.calls.length - 1][0];
+      const lastCall = MockPool.mock.calls[MockPool.mock.calls.length - 1][0];
 
       expect(lastCall.connectionString).toBe(customUrl);
     });
@@ -91,13 +102,13 @@ describe('DatabaseClient', () => {
   describe('query', () => {
     it('should execute parameterized query', async () => {
       const mockResult = { rows: [{ id: 1 }], rowCount: 1 };
-      mockPool.query.mockResolvedValue(mockResult);
+      mockPoolInstance.query.mockResolvedValue(mockResult);
 
       const result = await db.query('SELECT * FROM threads WHERE id = $1', [
         'thread-123',
       ]);
 
-      expect(mockPool.query).toHaveBeenCalledWith(
+      expect(mockPoolInstance.query).toHaveBeenCalledWith(
         'SELECT * FROM threads WHERE id = $1',
         ['thread-123']
       );
@@ -106,11 +117,11 @@ describe('DatabaseClient', () => {
 
     it('should execute query without parameters', async () => {
       const mockResult = { rows: [{ count: 10 }], rowCount: 1 };
-      mockPool.query.mockResolvedValue(mockResult);
+      mockPoolInstance.query.mockResolvedValue(mockResult);
 
       const result = await db.query('SELECT COUNT(*) FROM threads');
 
-      expect(mockPool.query).toHaveBeenCalledWith(
+      expect(mockPoolInstance.query).toHaveBeenCalledWith(
         'SELECT COUNT(*) FROM threads',
         []
       );
@@ -119,7 +130,7 @@ describe('DatabaseClient', () => {
 
     it('should throw error on query failure', async () => {
       const error = new Error('Query failed');
-      mockPool.query.mockRejectedValue(error);
+      mockPoolInstance.query.mockRejectedValue(error);
 
       await expect(
         db.query('SELECT * FROM invalid_table')
@@ -129,7 +140,7 @@ describe('DatabaseClient', () => {
     it('should log query execution', async () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const mockResult = { rows: [], rowCount: 0 };
-      mockPool.query.mockResolvedValue(mockResult);
+      mockPoolInstance.query.mockResolvedValue(mockResult);
 
       await db.query('SELECT * FROM threads');
 
@@ -148,74 +159,74 @@ describe('DatabaseClient', () => {
 
   describe('beginTransaction', () => {
     it('should start transaction and return client', async () => {
-      mockClient.query.mockResolvedValue({});
+      mockClientInstance.query.mockResolvedValue({});
 
       const client = await db.beginTransaction();
 
-      expect(mockPool.connect).toHaveBeenCalled();
-      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
-      expect(client).toBe(mockClient);
+      expect(mockPoolInstance.connect).toHaveBeenCalled();
+      expect(mockClientInstance.query).toHaveBeenCalledWith('BEGIN');
+      expect(client).toBe(mockClientInstance);
     });
 
     it('should release client on BEGIN failure', async () => {
       const error = new Error('BEGIN failed');
-      mockClient.query.mockRejectedValue(error);
+      mockClientInstance.query.mockRejectedValue(error);
 
       await expect(db.beginTransaction()).rejects.toThrow('BEGIN failed');
-      expect(mockClient.release).toHaveBeenCalled();
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
   });
 
   describe('commit', () => {
     it('should commit transaction and release client', async () => {
-      mockClient.query.mockResolvedValue({});
+      mockClientInstance.query.mockResolvedValue({});
 
-      await db.commit(mockClient);
+      await db.commit(mockClientInstance);
 
-      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
-      expect(mockClient.release).toHaveBeenCalled();
+      expect(mockClientInstance.query).toHaveBeenCalledWith('COMMIT');
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
 
     it('should release client even if commit fails', async () => {
       const error = new Error('COMMIT failed');
-      mockClient.query.mockRejectedValue(error);
+      mockClientInstance.query.mockRejectedValue(error);
 
-      await expect(db.commit(mockClient)).rejects.toThrow('COMMIT failed');
-      expect(mockClient.release).toHaveBeenCalled();
+      await expect(db.commit(mockClientInstance)).rejects.toThrow('COMMIT failed');
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
   });
 
   describe('rollback', () => {
     it('should rollback transaction and release client', async () => {
-      mockClient.query.mockResolvedValue({});
+      mockClientInstance.query.mockResolvedValue({});
 
-      await db.rollback(mockClient);
+      await db.rollback(mockClientInstance);
 
-      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
-      expect(mockClient.release).toHaveBeenCalled();
+      expect(mockClientInstance.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
 
     it('should release client even if rollback fails', async () => {
       const error = new Error('ROLLBACK failed');
-      mockClient.query.mockRejectedValue(error);
+      mockClientInstance.query.mockRejectedValue(error);
 
-      await expect(db.rollback(mockClient)).rejects.toThrow('ROLLBACK failed');
-      expect(mockClient.release).toHaveBeenCalled();
+      await expect(db.rollback(mockClientInstance)).rejects.toThrow('ROLLBACK failed');
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
   });
 
   describe('close', () => {
     it('should close connection pool', async () => {
-      mockPool.end.mockResolvedValue(undefined);
+      mockPoolInstance.end.mockResolvedValue(undefined);
 
       await db.close();
 
-      expect(mockPool.end).toHaveBeenCalled();
+      expect(mockPoolInstance.end).toHaveBeenCalled();
     });
 
     it('should throw error if close fails', async () => {
       const error = new Error('Close failed');
-      mockPool.end.mockRejectedValue(error);
+      mockPoolInstance.end.mockRejectedValue(error);
 
       await expect(db.close()).rejects.toThrow('Close failed');
     });
@@ -227,17 +238,17 @@ describe('DatabaseClient', () => {
         rows: [{ now: new Date() }],
         rowCount: 1,
       };
-      mockPool.query.mockResolvedValue(mockResult);
+      mockPoolInstance.query.mockResolvedValue(mockResult);
 
       const result = await db.testConnection();
 
-      expect(mockPool.query).toHaveBeenCalledWith('SELECT NOW()');
+      expect(mockPoolInstance.query).toHaveBeenCalledWith('SELECT NOW()', []);
       expect(result).toBe(true);
     });
 
     it('should return false on connection failure', async () => {
       const error = new Error('Connection failed');
-      mockPool.query.mockRejectedValue(error);
+      mockPoolInstance.query.mockRejectedValue(error);
 
       const result = await db.testConnection();
 
@@ -247,7 +258,7 @@ describe('DatabaseClient', () => {
 
   describe('Transaction workflow', () => {
     it('should handle complete transaction workflow', async () => {
-      mockClient.query.mockResolvedValue({});
+      mockClientInstance.query.mockResolvedValue({});
 
       // トランザクション開始
       const client = await db.beginTransaction();
@@ -264,21 +275,21 @@ describe('DatabaseClient', () => {
       // コミット
       await db.commit(client);
 
-      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
-      expect(mockClient.query).toHaveBeenCalledWith(
+      expect(mockClientInstance.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClientInstance.query).toHaveBeenCalledWith(
         'INSERT INTO threads (title) VALUES ($1)',
         ['Test Thread']
       );
-      expect(mockClient.query).toHaveBeenCalledWith(
+      expect(mockClientInstance.query).toHaveBeenCalledWith(
         'INSERT INTO posts (thread_id, content) VALUES ($1, $2)',
         ['thread-123', 'Test Post']
       );
-      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
-      expect(mockClient.release).toHaveBeenCalled();
+      expect(mockClientInstance.query).toHaveBeenCalledWith('COMMIT');
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
 
     it('should rollback on error during transaction', async () => {
-      mockClient.query
+      mockClientInstance.query
         .mockResolvedValueOnce({}) // BEGIN
         .mockResolvedValueOnce({}) // INSERT 1
         .mockRejectedValueOnce(new Error('Query failed')) // INSERT 2 fails
@@ -298,9 +309,9 @@ describe('DatabaseClient', () => {
         await db.rollback(client);
       }
 
-      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
-      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
-      expect(mockClient.release).toHaveBeenCalled();
+      expect(mockClientInstance.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClientInstance.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClientInstance.release).toHaveBeenCalled();
     });
   });
 });

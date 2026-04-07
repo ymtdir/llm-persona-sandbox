@@ -1,28 +1,68 @@
 import { Hono } from 'hono';
+import { logger } from 'hono/logger';
+import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
+import { threadsRouter } from './routes/threads';
 
+/**
+ * Honoアプリケーション
+ */
 const app = new Hono();
 
-// ルートパスでHello Worldを返す
-app.get('/', (c) => {
-  return c.text('Hello World from LLM Persona Sandbox!');
+/**
+ * ミドルウェア設定
+ */
+
+// ロガーミドルウェア - すべてのリクエストをログ出力
+app.use('*', logger());
+
+// CORSミドルウェア - 開発環境で有効化
+if (process.env.NODE_ENV !== 'production') {
+  app.use('*', cors());
+}
+
+/**
+ * エラーハンドリングミドルウェア
+ */
+app.onError((err, c) => {
+  console.error(`[ERROR] ${err.message}`, err);
+  return c.json(
+    {
+      error: 'Internal Server Error',
+      message: err.message,
+    },
+    500
+  );
 });
 
+/**
+ * ルート定義
+ */
+
 // ヘルスチェックエンドポイント
-app.get('/health', (c) => {
+app.get('/', (c) => {
   return c.json({
     status: 'ok',
+    message: 'LLM Persona Sandbox is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
   });
 });
 
-// ポート番号を環境変数から取得
+// スレッドルートのマウント
+app.route('/threads', threadsRouter);
+
+/**
+ * サーバー起動
+ */
 const port = parseInt(process.env.PORT || '3000', 10);
 
-// サーバーの起動
-console.log(`Server is running on http://localhost:${port}`);
+console.log(`[INFO] Starting Hono server on port ${port}...`);
+
 serve({
   fetch: app.fetch,
   port,
 });
+
+console.log(`[INFO] Hono server is running on http://localhost:${port}`);
+console.log(`[INFO] Health check: http://localhost:${port}/`);
+console.log(`[INFO] Threads API: http://localhost:${port}/threads`);

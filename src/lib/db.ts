@@ -1,8 +1,11 @@
 import pg from 'pg';
+import type { IDatabaseClient, TransactionClient } from './dbInterface';
+import type { DatabaseConfig } from './dbConfig';
+import { getDatabaseConfigFromEnv } from './dbConfig';
+import type { Logger } from './logger';
+import { getDefaultLogger } from './logger';
 
 const { Pool } = pg;
-
-type PoolClient = pg.PoolClient;
 
 /**
  * DatabaseClient
@@ -10,32 +13,36 @@ type PoolClient = pg.PoolClient;
  * PostgreSQLへの接続とクエリ実行を担当するクラス。
  * パラメータ化クエリによるSQLインジェクション対策、
  * トランザクション管理、コネクションプーリングを実装。
+ *
+ * 依存性注入により、設定とロガーを外部から提供可能。
  */
-export class DatabaseClient {
+export class DatabaseClient implements IDatabaseClient {
   private pool: pg.Pool;
+  private logger: Logger;
 
-  constructor(connectionString?: string) {
-    const dbUrl = connectionString || process.env.DATABASE_URL;
-
-    if (!dbUrl) {
-      throw new Error(
-        'DATABASE_URL is not defined. Please set it in environment variables.'
-      );
-    }
+  /**
+   * DatabaseClientを構築
+   *
+   * @param config - データベース接続設定（省略時は環境変数から取得）
+   * @param logger - ロガー（省略時はデフォルトロガーを使用）
+   */
+  constructor(config?: DatabaseConfig, logger?: Logger) {
+    const dbConfig = config || getDatabaseConfigFromEnv();
+    this.logger = logger || getDefaultLogger();
 
     this.pool = new Pool({
-      connectionString: dbUrl,
-      max: 20, // 最大接続数
-      idleTimeoutMillis: 30000, // アイドル接続のタイムアウト (30秒)
-      connectionTimeoutMillis: 2000, // 接続タイムアウト (2秒)
+      connectionString: dbConfig.connectionString,
+      max: dbConfig.max,
+      idleTimeoutMillis: dbConfig.idleTimeoutMillis,
+      connectionTimeoutMillis: dbConfig.connectionTimeoutMillis,
     });
 
     // プールのエラーハンドリング
     this.pool.on('error', (err) => {
-      console.error('[DatabaseClient] Unexpected error on idle client', err);
+      this.logger.error('[DatabaseClient] Unexpected error on idle client', err);
     });
 
-    console.log('[DatabaseClient] Connection pool initialized');
+    this.logger.log('[DatabaseClient] Connection pool initialized');
   }
 
   /**
@@ -61,7 +68,7 @@ export class DatabaseClient {
       const result = await this.pool.query<T>(sql, params);
       const duration = Date.now() - start;
 
-      console.log('[DatabaseClient] Query executed', {
+      this.logger.log('[DatabaseClient] Query executed', {
         sql: sql.substring(0, 100), // 最初の100文字のみログ
         duration: `${duration}ms`,
         rows: result.rowCount,
@@ -71,7 +78,7 @@ export class DatabaseClient {
     } catch (error) {
       const duration = Date.now() - start;
 
-      console.error('[DatabaseClient] Query failed', {
+      this.logger.error('[DatabaseClient] Query failed', {
         sql: sql.substring(0, 100),
         duration: `${duration}ms`,
         error: error instanceof Error ? error.message : String(error),
@@ -97,16 +104,16 @@ export class DatabaseClient {
    *   throw error;
    * }
    */
-  async beginTransaction(): Promise<PoolClient> {
+  async beginTransaction(): Promise<TransactionClient> {
     const client = await this.pool.connect();
 
     try {
       await client.query('BEGIN');
-      console.log('[DatabaseClient] Transaction started');
+      this.logger.log('[DatabaseClient] Transaction started');
       return client;
     } catch (error) {
       client.release();
-      console.error('[DatabaseClient] Failed to start transaction', error);
+      this.logger.error('[DatabaseClient] Failed to start transaction', error);
       throw error;
     }
   }
@@ -116,15 +123,16 @@ export class DatabaseClient {
    *
    * @param client - トランザクションクライアント
    */
-  async commit(client: PoolClient): Promise<void> {
+  async commit(client: TransactionClient): Promise<void> {
+    const poolClient = client as pg.PoolClient;
     try {
-      await client.query('COMMIT');
-      console.log('[DatabaseClient] Transaction committed');
+      await poolClient.query('COMMIT');
+      this.logger.log('[DatabaseClient] Transaction committed');
     } catch (error) {
-      console.error('[DatabaseClient] Failed to commit transaction', error);
+      this.logger.error('[DatabaseClient] Failed to commit transaction', error);
       throw error;
     } finally {
-      client.release();
+      poolClient.release();
     }
   }
 
@@ -133,15 +141,16 @@ export class DatabaseClient {
    *
    * @param client - トランザクションクライアント
    */
-  async rollback(client: PoolClient): Promise<void> {
+  async rollback(client: TransactionClient): Promise<void> {
+    const poolClient = client as pg.PoolClient;
     try {
-      await client.query('ROLLBACK');
-      console.log('[DatabaseClient] Transaction rolled back');
+      await poolClient.query('ROLLBACK');
+      this.logger.log('[DatabaseClient] Transaction rolled back');
     } catch (error) {
-      console.error('[DatabaseClient] Failed to rollback transaction', error);
+      this.logger.error('[DatabaseClient] Failed to rollback transaction', error);
       throw error;
     } finally {
-      client.release();
+      poolClient.release();
     }
   }
 
@@ -153,9 +162,9 @@ export class DatabaseClient {
   async close(): Promise<void> {
     try {
       await this.pool.end();
-      console.log('[DatabaseClient] Connection pool closed');
+      this.logger.log('[DatabaseClient] Connection pool closed');
     } catch (error) {
-      console.error('[DatabaseClient] Failed to close connection pool', error);
+      this.logger.error('[DatabaseClient] Failed to close connection pool', error);
       throw error;
     }
   }
@@ -170,38 +179,87 @@ export class DatabaseClient {
   async testConnection(): Promise<boolean> {
     try {
       const result = await this.query('SELECT NOW()');
-      console.log('[DatabaseClient] Connection test successful', result.rows[0]);
+      this.logger.log('[DatabaseClient] Connection test successful', result.rows[0]);
       return true;
     } catch (error) {
-      console.error('[DatabaseClient] Connection test failed', error);
+      this.logger.error('[DatabaseClient] Connection test failed', error);
       return false;
     }
   }
 }
 
-// シングルトンインスタンス
-let dbInstance: DatabaseClient | null = null;
+/**
+ * DatabaseClientファクトリー
+ *
+ * グローバルシングルトンの代わりに、明示的なファクトリーパターンを使用。
+ * テスト時には異なるインスタンスを作成可能。
+ */
+export class DatabaseClientFactory {
+  private static instance: IDatabaseClient | null = null;
+
+  /**
+   * シングルトンインスタンスを取得
+   *
+   * @param config - データベース接続設定
+   * @param logger - ロガー
+   * @returns DatabaseClientインスタンス
+   */
+  static getInstance(config?: DatabaseConfig, logger?: Logger): IDatabaseClient {
+    if (!this.instance) {
+      this.instance = new DatabaseClient(config, logger);
+    }
+    return this.instance;
+  }
+
+  /**
+   * 新しいインスタンスを作成
+   *
+   * テスト時に使用
+   *
+   * @param config - データベース接続設定
+   * @param logger - ロガー
+   * @returns 新しいDatabaseClientインスタンス
+   */
+  static createInstance(config?: DatabaseConfig, logger?: Logger): IDatabaseClient {
+    return new DatabaseClient(config, logger);
+  }
+
+  /**
+   * シングルトンインスタンスをリセット
+   *
+   * テスト時に使用
+   */
+  static resetInstance(): void {
+    this.instance = null;
+  }
+
+  /**
+   * シングルトンインスタンスを閉じてリセット
+   */
+  static async closeInstance(): Promise<void> {
+    if (this.instance) {
+      await this.instance.close();
+      this.instance = null;
+    }
+  }
+}
 
 /**
- * DatabaseClientのシングルトンインスタンスを取得
+ * デフォルトのDatabaseClientインスタンスを取得
+ *
+ * 後方互換性のための便利関数
  *
  * @returns DatabaseClientインスタンス
  */
-export function getDatabase(): DatabaseClient {
-  if (!dbInstance) {
-    dbInstance = new DatabaseClient();
-  }
-  return dbInstance;
+export function getDatabase(): IDatabaseClient {
+  return DatabaseClientFactory.getInstance();
 }
 
 /**
  * DatabaseClientインスタンスを閉じる
  *
- * アプリケーション終了時に呼び出す
+ * 後方互換性のための便利関数
  */
 export async function closeDatabase(): Promise<void> {
-  if (dbInstance) {
-    await dbInstance.close();
-    dbInstance = null;
-  }
+  await DatabaseClientFactory.closeInstance();
 }

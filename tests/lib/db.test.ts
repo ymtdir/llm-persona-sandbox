@@ -1,25 +1,32 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { DatabaseClient } from '../../src/lib/db';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { DatabaseClient, DatabaseClientFactory } from '../../src/lib/db';
+import type { DatabaseConfig } from '../../src/lib/dbConfig';
+import { SilentLogger } from '../../src/lib/logger';
 
 // pg モジュールのモック
 vi.mock('pg', () => {
-  const mockPoolInstance = {
+  // 各テストで独立したモックインスタンスを作成
+  const createMockPool = () => ({
     query: vi.fn(),
     connect: vi.fn(),
     end: vi.fn(),
     on: vi.fn(),
-  };
+  });
 
-  const mockClientInstance = {
+  const createMockClient = () => ({
     query: vi.fn(),
     release: vi.fn(),
-  };
+  });
 
-  const MockPool = vi.fn(() => mockPoolInstance);
-
-  // Export mocks for test access
-  MockPool.mockPoolInstance = mockPoolInstance;
-  MockPool.mockClientInstance = mockClientInstance;
+  const MockPool = vi.fn(() => {
+    const pool = createMockPool();
+    const client = createMockClient();
+    pool.connect.mockResolvedValue(client);
+    // モックインスタンスをPoolに保存
+    (MockPool as any)._lastPool = pool;
+    (MockPool as any)._lastClient = client;
+    return pool;
+  });
 
   return {
     default: {
@@ -31,9 +38,11 @@ vi.mock('pg', () => {
 
 describe('DatabaseClient', () => {
   let db: DatabaseClient;
-  let mockPoolInstance: any;
-  let mockClientInstance: any;
+  let mockConfig: DatabaseConfig;
+  let logger: SilentLogger;
   let MockPool: any;
+  let mockPool: any;
+  let mockClient: any;
 
   beforeEach(async () => {
     // 環境変数を設定
@@ -41,40 +50,40 @@ describe('DatabaseClient', () => {
 
     // モックのリセット
     vi.clearAllMocks();
+    DatabaseClientFactory.resetInstance();
 
-    // pg モジュールからモックインスタンスを取得
+    // テスト用の設定
+    mockConfig = {
+      connectionString: 'postgresql://user:pass@localhost:5432/testdb',
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    };
+
+    // サイレントロガーを使用（テスト時はログ出力しない）
+    logger = new SilentLogger();
+
+    // pg モジュールからモックを取得
     const pg = await import('pg');
     MockPool = (pg as any).default.Pool;
-    mockPoolInstance = MockPool.mockPoolInstance;
-    mockClientInstance = MockPool.mockClientInstance;
 
-    // モックのリセット
-    mockPoolInstance.query.mockReset();
-    mockPoolInstance.connect.mockReset();
-    mockPoolInstance.end.mockReset();
-    mockPoolInstance.on.mockReset();
-    mockClientInstance.query.mockReset();
-    mockClientInstance.release.mockReset();
+    // DatabaseClientを作成
+    db = new DatabaseClient(mockConfig, logger);
 
-    // モックの初期設定
-    mockPoolInstance.connect.mockResolvedValue(mockClientInstance);
-
-    db = new DatabaseClient();
-  });
-
-  afterEach(() => {
-    delete process.env.DATABASE_URL;
+    // モックインスタンスを取得
+    mockPool = (MockPool as any)._lastPool;
+    mockClient = (MockPool as any)._lastClient;
   });
 
   describe('constructor', () => {
-    it('should throw error if DATABASE_URL is not defined', () => {
+    it('should throw error if DATABASE_URL is not defined and no config provided', () => {
       delete process.env.DATABASE_URL;
-      expect(() => new DatabaseClient()).toThrow(
+      expect(() => new DatabaseClient(undefined, logger)).toThrow(
         'DATABASE_URL is not defined'
       );
     });
 
-    it('should initialize pool with connection string', () => {
+    it('should initialize pool with provided config', () => {
       expect(MockPool).toHaveBeenCalledWith(
         expect.objectContaining({
           connectionString: 'postgresql://user:pass@localhost:5432/testdb',
@@ -86,29 +95,32 @@ describe('DatabaseClient', () => {
     });
 
     it('should set up error handler on pool', () => {
-      expect(mockPoolInstance.on).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(mockPool.on).toHaveBeenCalledWith('error', expect.any(Function));
     });
 
-    it('should accept connection string as parameter', () => {
-      const customUrl = 'postgresql://custom:pass@localhost:5432/customdb';
-      const customDb = new DatabaseClient(customUrl);
+    it('should accept custom config', () => {
+      const customConfig: DatabaseConfig = {
+        connectionString: 'postgresql://custom:pass@localhost:5432/customdb',
+        max: 10,
+      };
+      const customDb = new DatabaseClient(customConfig, logger);
 
       const lastCall = MockPool.mock.calls[MockPool.mock.calls.length - 1][0];
-
-      expect(lastCall.connectionString).toBe(customUrl);
+      expect(lastCall.connectionString).toBe(customConfig.connectionString);
+      expect(lastCall.max).toBe(10);
     });
   });
 
   describe('query', () => {
     it('should execute parameterized query', async () => {
       const mockResult = { rows: [{ id: 1 }], rowCount: 1 };
-      mockPoolInstance.query.mockResolvedValue(mockResult);
+      mockPool.query.mockResolvedValue(mockResult);
 
       const result = await db.query('SELECT * FROM threads WHERE id = $1', [
         'thread-123',
       ]);
 
-      expect(mockPoolInstance.query).toHaveBeenCalledWith(
+      expect(mockPool.query).toHaveBeenCalledWith(
         'SELECT * FROM threads WHERE id = $1',
         ['thread-123']
       );
@@ -117,11 +129,11 @@ describe('DatabaseClient', () => {
 
     it('should execute query without parameters', async () => {
       const mockResult = { rows: [{ count: 10 }], rowCount: 1 };
-      mockPoolInstance.query.mockResolvedValue(mockResult);
+      mockPool.query.mockResolvedValue(mockResult);
 
       const result = await db.query('SELECT COUNT(*) FROM threads');
 
-      expect(mockPoolInstance.query).toHaveBeenCalledWith(
+      expect(mockPool.query).toHaveBeenCalledWith(
         'SELECT COUNT(*) FROM threads',
         []
       );
@@ -130,103 +142,117 @@ describe('DatabaseClient', () => {
 
     it('should throw error on query failure', async () => {
       const error = new Error('Query failed');
-      mockPoolInstance.query.mockRejectedValue(error);
+      mockPool.query.mockRejectedValue(error);
 
       await expect(
         db.query('SELECT * FROM invalid_table')
       ).rejects.toThrow('Query failed');
     });
 
-    it('should log query execution', async () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    it('should handle empty result', async () => {
       const mockResult = { rows: [], rowCount: 0 };
-      mockPoolInstance.query.mockResolvedValue(mockResult);
+      mockPool.query.mockResolvedValue(mockResult);
 
-      await db.query('SELECT * FROM threads');
+      const result = await db.query('SELECT * FROM threads WHERE id = $1', ['nonexistent']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[DatabaseClient] Query executed',
-        expect.objectContaining({
-          sql: expect.any(String),
-          duration: expect.stringContaining('ms'),
-          rows: 0,
-        })
+      expect(result.rows).toEqual([]);
+      expect(result.rowCount).toBe(0);
+    });
+
+    it('should handle null parameters', async () => {
+      const mockResult = { rows: [{ id: 1 }], rowCount: 1 };
+      mockPool.query.mockResolvedValue(mockResult);
+
+      const result = await db.query('SELECT * FROM threads WHERE title = $1', [null]);
+
+      expect(mockPool.query).toHaveBeenCalledWith(
+        'SELECT * FROM threads WHERE title = $1',
+        [null]
       );
+      expect(result).toEqual(mockResult);
+    });
 
-      consoleSpy.mockRestore();
+    it('should handle very long SQL', async () => {
+      const longSql = 'SELECT * FROM threads WHERE ' + 'title = $1 OR '.repeat(100) + 'id = $2';
+      const mockResult = { rows: [], rowCount: 0 };
+      mockPool.query.mockResolvedValue(mockResult);
+
+      await db.query(longSql, ['test', '123']);
+
+      expect(mockPool.query).toHaveBeenCalledWith(longSql, ['test', '123']);
     });
   });
 
   describe('beginTransaction', () => {
     it('should start transaction and return client', async () => {
-      mockClientInstance.query.mockResolvedValue({});
+      mockClient.query.mockResolvedValue({});
 
       const client = await db.beginTransaction();
 
-      expect(mockPoolInstance.connect).toHaveBeenCalled();
-      expect(mockClientInstance.query).toHaveBeenCalledWith('BEGIN');
-      expect(client).toBe(mockClientInstance);
+      expect(mockPool.connect).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(client).toBe(mockClient);
     });
 
     it('should release client on BEGIN failure', async () => {
       const error = new Error('BEGIN failed');
-      mockClientInstance.query.mockRejectedValue(error);
+      mockClient.query.mockRejectedValue(error);
 
       await expect(db.beginTransaction()).rejects.toThrow('BEGIN failed');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 
   describe('commit', () => {
     it('should commit transaction and release client', async () => {
-      mockClientInstance.query.mockResolvedValue({});
+      mockClient.query.mockResolvedValue({});
 
-      await db.commit(mockClientInstance);
+      await db.commit(mockClient);
 
-      expect(mockClientInstance.query).toHaveBeenCalledWith('COMMIT');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
     it('should release client even if commit fails', async () => {
       const error = new Error('COMMIT failed');
-      mockClientInstance.query.mockRejectedValue(error);
+      mockClient.query.mockRejectedValue(error);
 
-      await expect(db.commit(mockClientInstance)).rejects.toThrow('COMMIT failed');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      await expect(db.commit(mockClient)).rejects.toThrow('COMMIT failed');
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 
   describe('rollback', () => {
     it('should rollback transaction and release client', async () => {
-      mockClientInstance.query.mockResolvedValue({});
+      mockClient.query.mockResolvedValue({});
 
-      await db.rollback(mockClientInstance);
+      await db.rollback(mockClient);
 
-      expect(mockClientInstance.query).toHaveBeenCalledWith('ROLLBACK');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
     it('should release client even if rollback fails', async () => {
       const error = new Error('ROLLBACK failed');
-      mockClientInstance.query.mockRejectedValue(error);
+      mockClient.query.mockRejectedValue(error);
 
-      await expect(db.rollback(mockClientInstance)).rejects.toThrow('ROLLBACK failed');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      await expect(db.rollback(mockClient)).rejects.toThrow('ROLLBACK failed');
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 
   describe('close', () => {
     it('should close connection pool', async () => {
-      mockPoolInstance.end.mockResolvedValue(undefined);
+      mockPool.end.mockResolvedValue(undefined);
 
       await db.close();
 
-      expect(mockPoolInstance.end).toHaveBeenCalled();
+      expect(mockPool.end).toHaveBeenCalled();
     });
 
     it('should throw error if close fails', async () => {
       const error = new Error('Close failed');
-      mockPoolInstance.end.mockRejectedValue(error);
+      mockPool.end.mockRejectedValue(error);
 
       await expect(db.close()).rejects.toThrow('Close failed');
     });
@@ -238,17 +264,17 @@ describe('DatabaseClient', () => {
         rows: [{ now: new Date() }],
         rowCount: 1,
       };
-      mockPoolInstance.query.mockResolvedValue(mockResult);
+      mockPool.query.mockResolvedValue(mockResult);
 
       const result = await db.testConnection();
 
-      expect(mockPoolInstance.query).toHaveBeenCalledWith('SELECT NOW()', []);
+      expect(mockPool.query).toHaveBeenCalledWith('SELECT NOW()', []);
       expect(result).toBe(true);
     });
 
     it('should return false on connection failure', async () => {
       const error = new Error('Connection failed');
-      mockPoolInstance.query.mockRejectedValue(error);
+      mockPool.query.mockRejectedValue(error);
 
       const result = await db.testConnection();
 
@@ -258,7 +284,7 @@ describe('DatabaseClient', () => {
 
   describe('Transaction workflow', () => {
     it('should handle complete transaction workflow', async () => {
-      mockClientInstance.query.mockResolvedValue({});
+      mockClient.query.mockResolvedValue({});
 
       // トランザクション開始
       const client = await db.beginTransaction();
@@ -275,21 +301,21 @@ describe('DatabaseClient', () => {
       // コミット
       await db.commit(client);
 
-      expect(mockClientInstance.query).toHaveBeenCalledWith('BEGIN');
-      expect(mockClientInstance.query).toHaveBeenCalledWith(
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClient.query).toHaveBeenCalledWith(
         'INSERT INTO threads (title) VALUES ($1)',
         ['Test Thread']
       );
-      expect(mockClientInstance.query).toHaveBeenCalledWith(
+      expect(mockClient.query).toHaveBeenCalledWith(
         'INSERT INTO posts (thread_id, content) VALUES ($1, $2)',
         ['thread-123', 'Test Post']
       );
-      expect(mockClientInstance.query).toHaveBeenCalledWith('COMMIT');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
     it('should rollback on error during transaction', async () => {
-      mockClientInstance.query
+      mockClient.query
         .mockResolvedValueOnce({}) // BEGIN
         .mockResolvedValueOnce({}) // INSERT 1
         .mockRejectedValueOnce(new Error('Query failed')) // INSERT 2 fails
@@ -309,9 +335,45 @@ describe('DatabaseClient', () => {
         await db.rollback(client);
       }
 
-      expect(mockClientInstance.query).toHaveBeenCalledWith('BEGIN');
-      expect(mockClientInstance.query).toHaveBeenCalledWith('ROLLBACK');
-      expect(mockClientInstance.release).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+  });
+
+  describe('DatabaseClientFactory', () => {
+    it('should create singleton instance', () => {
+      const instance1 = DatabaseClientFactory.getInstance(mockConfig, logger);
+      const instance2 = DatabaseClientFactory.getInstance(mockConfig, logger);
+
+      expect(instance1).toBe(instance2);
+    });
+
+    it('should create new instance with createInstance', () => {
+      const instance1 = DatabaseClientFactory.createInstance(mockConfig, logger);
+      const instance2 = DatabaseClientFactory.createInstance(mockConfig, logger);
+
+      expect(instance1).not.toBe(instance2);
+    });
+
+    it('should reset singleton instance', () => {
+      const instance1 = DatabaseClientFactory.getInstance(mockConfig, logger);
+      DatabaseClientFactory.resetInstance();
+      const instance2 = DatabaseClientFactory.getInstance(mockConfig, logger);
+
+      expect(instance1).not.toBe(instance2);
+    });
+
+    it('should close and reset instance', async () => {
+      const instance = DatabaseClientFactory.getInstance(mockConfig, logger);
+
+      // インスタンス作成後にmockPoolを取得
+      const currentMockPool = (MockPool as any)._lastPool;
+      currentMockPool.end.mockResolvedValue(undefined);
+
+      await DatabaseClientFactory.closeInstance();
+
+      expect(currentMockPool.end).toHaveBeenCalled();
     });
   });
 });

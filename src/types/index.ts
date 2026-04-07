@@ -134,3 +134,38 @@ export interface Post {
    */
   createdAt: Date;
 }
+
+/**
+ * レス作成データ
+ */
+export interface CreatePostData {
+  /**
+   * スレッドID
+   */
+  threadId: string;
+
+  /**
+   * 投稿内容（1-2000文字）
+   */
+  content: string;
+
+  /**
+   * 投稿者名（省略時は「名無しさん」）
+   */
+  authorName?: string;
+
+  /**
+   * キャラクターID（AI投稿の場合のみ）
+   */
+  characterId?: string;
+
+  /**
+   * アンカー情報（カンマ区切り: "1,2,5"）
+   */
+  anchors?: string;
+
+  /**
+   * ユーザー投稿フラグ（デフォルト: true）
+   */
+  isUserPost?: boolean;
+}

@@ -82,18 +82,27 @@ export class OllamaClient {
         );
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
 
       const duration = Date.now() - startTime;
-      console.log('[INFO] OllamaClient: Chat request completed', {
-        duration: `${duration}ms`,
-        contentLength: data.message?.content?.length || 0,
-      });
 
       // レスポンス検証
-      if (!data.message || typeof data.message.content !== 'string') {
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('message' in data) ||
+        !data.message ||
+        typeof data.message !== 'object' ||
+        !('content' in data.message) ||
+        typeof data.message.content !== 'string'
+      ) {
         throw new Error('Invalid response format: missing message.content');
       }
+
+      console.log('[INFO] OllamaClient: Chat request completed', {
+        duration: `${duration}ms`,
+        contentLength: data.message.content.length,
+      });
 
       return data as ChatResponse;
     } catch (error) {

@@ -85,12 +85,17 @@ export class CharacterSelector {
     });
 
     // スコア30点以上を抽出
-    const candidates = scores.filter((score) => score.totalScore >= 30);
+    let candidates = scores.filter((score) => score.totalScore >= 30);
+
+    // 候補が不足している場合、全キャラクターから選択
+    if (candidates.length < minCount) {
+      candidates = scores;
+    }
 
     // スコア順にソート（降順）
     candidates.sort((a, b) => b.totalScore - a.totalScore);
 
-    // 候補が少ない場合は全て返す
+    // 候補がminCount以下の場合は全て返す
     if (candidates.length <= minCount) {
       return candidates.map((s) => s.character);
     }

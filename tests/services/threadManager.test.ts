@@ -275,6 +275,20 @@ describe('ThreadManager', () => {
         expect.any(Array)
       );
     });
+
+    it('should throw error when thread not found', async () => {
+      vi.mocked(mockDb.query).mockResolvedValue({
+        rows: [],
+        rowCount: 0,
+        command: 'UPDATE',
+        oid: 0,
+        fields: [],
+      });
+
+      await expect(
+        threadManager.updateLastPostAt('nonexistent-uuid')
+      ).rejects.toThrow('スレッドが見つかりません: nonexistent-uuid');
+    });
   });
 
   describe('incrementPostCount', () => {
@@ -297,6 +311,20 @@ describe('ThreadManager', () => {
         expect.stringContaining('post_count = post_count + 1'),
         expect.any(Array)
       );
+    });
+
+    it('should throw error when thread not found', async () => {
+      vi.mocked(mockDb.query).mockResolvedValue({
+        rows: [],
+        rowCount: 0,
+        command: 'UPDATE',
+        oid: 0,
+        fields: [],
+      });
+
+      await expect(
+        threadManager.incrementPostCount('nonexistent-uuid')
+      ).rejects.toThrow('スレッドが見つかりません: nonexistent-uuid');
     });
   });
 

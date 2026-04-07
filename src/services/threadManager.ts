@@ -149,28 +149,38 @@ export class ThreadManager {
    * 最終レス日時を更新
    *
    * @param id - スレッドID
+   * @throws スレッドが存在しない場合
    */
   async updateLastPostAt(id: string): Promise<void> {
-    await this.db.query(
+    const result = await this.db.query(
       `UPDATE threads
        SET last_post_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [id]
     );
+
+    if (result.rowCount === 0) {
+      throw new Error(`スレッドが見つかりません: ${id}`);
+    }
   }
 
   /**
    * レス数をインクリメント
    *
    * @param id - スレッドID
+   * @throws スレッドが存在しない場合
    */
   async incrementPostCount(id: string): Promise<void> {
-    await this.db.query(
+    const result = await this.db.query(
       `UPDATE threads
        SET post_count = post_count + 1
        WHERE id = $1`,
       [id]
     );
+
+    if (result.rowCount === 0) {
+      throw new Error(`スレッドが見つかりません: ${id}`);
+    }
   }
 
   /**

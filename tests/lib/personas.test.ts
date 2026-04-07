@@ -193,29 +193,54 @@ describe('personas', () => {
       expect(characters).toContain(result);
     });
 
-    it('should return different characters over multiple calls', () => {
-      const results = new Set<Character>();
-      // 100回実行して、少なくとも2種類以上のキャラクターが出現することを確認
-      for (let i = 0; i < 100; i++) {
-        results.add(getRandomCharacter());
-      }
-      expect(results.size).toBeGreaterThan(1);
+    it('should return different characters based on random value', () => {
+      // 異なるランダム値で異なるキャラクターが返されることを確認
+      const totalFrequency = 25;
+
+      // majiresuを取得
+      vi.spyOn(Math, 'random').mockReturnValue(0 / totalFrequency);
+      const char1 = getRandomCharacter();
+
+      // aoriを取得
+      vi.spyOn(Math, 'random').mockReturnValue(10 / totalFrequency);
+      const char2 = getRandomCharacter();
+
+      // romを取得
+      vi.spyOn(Math, 'random').mockReturnValue(20 / totalFrequency);
+      const char3 = getRandomCharacter();
+
+      expect(char1.id).toBe('majiresu');
+      expect(char2.id).toBe('aori');
+      expect(char3.id).toBe('rom');
+      expect(char1).not.toBe(char2);
+      expect(char2).not.toBe(char3);
     });
 
-    it('should respect frequency weighting (majiresu more frequent than rom)', () => {
-      const counts = new Map<string, number>();
-      const iterations = 1000;
+    it('should respect frequency weighting (deterministic test)', () => {
+      // 頻度の累積値をテスト
+      // majiresu: 7, aori: 5, monoshiri: 6, rom: 3, newcomer: 4
+      // 累積: 7, 12, 18, 21, 25
+      const totalFrequency = 25;
 
-      for (let i = 0; i < iterations; i++) {
-        const char = getRandomCharacter();
-        counts.set(char.id, (counts.get(char.id) || 0) + 1);
-      }
+      // majiresuが選ばれる範囲: [0, 7)
+      vi.spyOn(Math, 'random').mockReturnValue(3 / totalFrequency);
+      expect(getRandomCharacter().id).toBe('majiresu');
 
-      // majiresu (frequency: 7) should appear more often than rom (frequency: 3)
-      const majiresuCount = counts.get('majiresu') || 0;
-      const romCount = counts.get('rom') || 0;
+      // aoriが選ばれる範囲: [7, 12)
+      vi.spyOn(Math, 'random').mockReturnValue(9 / totalFrequency);
+      expect(getRandomCharacter().id).toBe('aori');
 
-      expect(majiresuCount).toBeGreaterThan(romCount);
+      // monoshiriが選ばれる範囲: [12, 18)
+      vi.spyOn(Math, 'random').mockReturnValue(15 / totalFrequency);
+      expect(getRandomCharacter().id).toBe('monoshiri');
+
+      // romが選ばれる範囲: [18, 21)
+      vi.spyOn(Math, 'random').mockReturnValue(19 / totalFrequency);
+      expect(getRandomCharacter().id).toBe('rom');
+
+      // newcomerが選ばれる範囲: [21, 25)
+      vi.spyOn(Math, 'random').mockReturnValue(23 / totalFrequency);
+      expect(getRandomCharacter().id).toBe('newcomer');
     });
 
     it('should return first character when Math.random returns 0', () => {

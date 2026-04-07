@@ -27,9 +27,7 @@ export function getDatabaseConfigFromEnv(): DatabaseConfig {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
-    throw new Error(
-      'DATABASE_URL is not defined. Please set it in environment variables.'
-    );
+    throw new Error('DATABASE_URL is not defined. Please set it in environment variables.');
   }
 
   return {

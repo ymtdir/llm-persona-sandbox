@@ -4,19 +4,27 @@ import { OllamaClient } from './ollamaClient';
 import { PostManager } from './postManager';
 
 /**
- * スレッド履歴の最大表示件数
+ * ResponseGeneratorのオプション
  */
-const MAX_HISTORY_LENGTH = 20;
+export interface ResponseGeneratorOptions {
+  /**
+   * 使用するOllamaモデル名
+   * デフォルト: process.env.OLLAMA_MODEL || 'llama3.1:8b'
+   */
+  model?: string;
 
-/**
- * デフォルトのOllamaモデル名
- */
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b';
+  /**
+   * スレッド履歴の最大表示件数
+   * デフォルト: 20
+   */
+  maxHistoryLength?: number;
 
-/**
- * デフォルトのレス生成トークン数
- */
-const DEFAULT_NUM_PREDICT = 200;
+  /**
+   * レス生成時の最大トークン数
+   * デフォルト: 200
+   */
+  numPredict?: number;
+}
 
 /**
  * ResponseGenerator
@@ -28,15 +36,22 @@ export class ResponseGenerator {
   private characterSelector: CharacterSelector;
   private ollamaClient: OllamaClient;
   private postManager: PostManager;
+  private model: string;
+  private maxHistoryLength: number;
+  private numPredict: number;
 
   constructor(
     characterSelector: CharacterSelector,
     ollamaClient: OllamaClient,
-    postManager: PostManager
+    postManager: PostManager,
+    options: ResponseGeneratorOptions = {}
   ) {
     this.characterSelector = characterSelector;
     this.ollamaClient = ollamaClient;
     this.postManager = postManager;
+    this.model = options.model ?? process.env.OLLAMA_MODEL ?? 'llama3.1:8b';
+    this.maxHistoryLength = options.maxHistoryLength ?? 20;
+    this.numPredict = options.numPredict ?? 200;
   }
 
   /**
@@ -134,11 +149,11 @@ export class ResponseGenerator {
     // ChatOptions
     const options: ChatOptions = {
       temperature: character.temperature,
-      num_predict: DEFAULT_NUM_PREDICT,
+      num_predict: this.numPredict,
     };
 
     // Ollama APIへリクエスト
-    const response = await this.ollamaClient.chat(DEFAULT_MODEL, messages, options);
+    const response = await this.ollamaClient.chat(this.model, messages, options);
 
     // 生成されたレス内容
     const generatedContent = response.message.content.trim();
@@ -218,7 +233,7 @@ ${userPost.postNumber}: ${userPost.authorName}: ${userPost.content}
    */
   private formatThreadHistory(posts: Post[]): string {
     // 最新N件に制限
-    const recentPosts = posts.slice(-MAX_HISTORY_LENGTH);
+    const recentPosts = posts.slice(-this.maxHistoryLength);
 
     // 2ch風フォーマットに変換
     return recentPosts

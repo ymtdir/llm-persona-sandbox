@@ -545,4 +545,179 @@ describe('ResponseGenerator', () => {
       consoleLogSpy.mockRestore();
     });
   });
+
+  describe('constructor options', () => {
+    it('should use custom model when provided', async () => {
+      const customGenerator = new ResponseGenerator(
+        mockCharacterSelector,
+        mockOllamaClient,
+        mockPostManager,
+        { model: 'custom-model:13b' }
+      );
+
+      vi.spyOn(mockCharacterSelector, 'selectCharacters').mockReturnValue([
+        testCharacters[0],
+      ]);
+
+      const mockResponse: ChatResponse = {
+        message: { role: 'assistant', content: 'レスです' },
+        done: true,
+      };
+      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+
+      vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
+        id: 4,
+        threadId: 'thread-1',
+        postNumber: 4,
+        authorName: 'テストキャラ1',
+        characterId: 'test1',
+        content: 'レスです',
+        anchors: null,
+        isUserPost: false,
+        createdAt: new Date(),
+      } as Post);
+
+      await customGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
+
+      // カスタムモデルが使用されることを確認
+      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+        'custom-model:13b',
+        expect.any(Array),
+        expect.any(Object)
+      );
+    });
+
+    it('should use custom numPredict when provided', async () => {
+      const customGenerator = new ResponseGenerator(
+        mockCharacterSelector,
+        mockOllamaClient,
+        mockPostManager,
+        { numPredict: 500 }
+      );
+
+      vi.spyOn(mockCharacterSelector, 'selectCharacters').mockReturnValue([
+        testCharacters[0],
+      ]);
+
+      const mockResponse: ChatResponse = {
+        message: { role: 'assistant', content: 'レスです' },
+        done: true,
+      };
+      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+
+      vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
+        id: 4,
+        threadId: 'thread-1',
+        postNumber: 4,
+        authorName: 'テストキャラ1',
+        characterId: 'test1',
+        content: 'レスです',
+        anchors: null,
+        isUserPost: false,
+        createdAt: new Date(),
+      } as Post);
+
+      await customGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
+
+      // カスタムnum_predictが使用されることを確認
+      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({
+          num_predict: 500,
+        })
+      );
+    });
+
+    it('should use custom maxHistoryLength when provided', async () => {
+      // 30件の履歴を作成
+      const longHistory: Post[] = Array.from({ length: 30 }, (_, i) => ({
+        id: i + 1,
+        threadId: 'thread-1',
+        postNumber: i + 1,
+        authorName: '名無しさん',
+        characterId: null,
+        content: `投稿${i + 1}`,
+        anchors: null,
+        isUserPost: true,
+        createdAt: new Date(),
+      }));
+
+      const customGenerator = new ResponseGenerator(
+        mockCharacterSelector,
+        mockOllamaClient,
+        mockPostManager,
+        { maxHistoryLength: 10 }
+      );
+
+      vi.spyOn(mockCharacterSelector, 'selectCharacters').mockReturnValue([
+        testCharacters[0],
+      ]);
+
+      const mockResponse: ChatResponse = {
+        message: { role: 'assistant', content: 'レスです' },
+        done: true,
+      };
+      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+
+      vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
+        id: 31,
+        threadId: 'thread-1',
+        postNumber: 31,
+        authorName: 'テストキャラ1',
+        characterId: 'test1',
+        content: 'レスです',
+        anchors: null,
+        isUserPost: false,
+        createdAt: new Date(),
+      } as Post);
+
+      await customGenerator.generateResponses('thread-1', testUserPost, longHistory);
+
+      // User Promptに最新10件のみが含まれることを確認
+      const chatCall = vi.mocked(mockOllamaClient.chat).mock.calls[0];
+      const userMessage = chatCall[1].find((m) => m.role === 'user');
+
+      // 21-30の10件のみが含まれる
+      expect(userMessage?.content).toContain('21: 名無しさん: 投稿21');
+      expect(userMessage?.content).toContain('30: 名無しさん: 投稿30');
+      expect(userMessage?.content).not.toContain('20: 名無しさん: 投稿20');
+    });
+
+    it('should use default values when options not provided', async () => {
+      // オプションなしでインスタンス作成（既存のresponseGeneratorを使用）
+      vi.spyOn(mockCharacterSelector, 'selectCharacters').mockReturnValue([
+        testCharacters[0],
+      ]);
+
+      const mockResponse: ChatResponse = {
+        message: { role: 'assistant', content: 'レスです' },
+        done: true,
+      };
+      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+
+      vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
+        id: 4,
+        threadId: 'thread-1',
+        postNumber: 4,
+        authorName: 'テストキャラ1',
+        characterId: 'test1',
+        content: 'レスです',
+        anchors: null,
+        isUserPost: false,
+        createdAt: new Date(),
+      } as Post);
+
+      await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
+
+      // デフォルト値が使用されることを確認
+      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+        expect.stringMatching(/llama3\.1:8b|.*:/), // デフォルトまたは環境変数
+        expect.any(Array),
+        expect.objectContaining({
+          num_predict: 200, // デフォルト値
+        })
+      );
+    });
+  });
 });

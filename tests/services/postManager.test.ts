@@ -1,16 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PostManager } from '../../src/services/postManager';
-import type { IDatabaseClient } from '../../src/lib/dbInterface';
+import type { IDatabaseClient, TransactionClient } from '../../src/lib/dbInterface';
 import type { CreatePostData } from '../../src/types';
 
 describe('PostManager', () => {
   let postManager: PostManager;
   let mockDb: IDatabaseClient;
+  let mockClient: TransactionClient;
 
   beforeEach(() => {
+    mockClient = {
+      query: vi.fn(),
+    };
+
     mockDb = {
       query: vi.fn(),
-      beginTransaction: vi.fn(),
+      beginTransaction: vi.fn().mockResolvedValue(mockClient),
       commit: vi.fn(),
       rollback: vi.fn(),
       close: vi.fn(),
@@ -22,8 +27,8 @@ describe('PostManager', () => {
 
   describe('createPost', () => {
     it('should create post with auto-incremented post_number', async () => {
-      // getNextPostNumber: 既存レスがある場合
-      vi.mocked(mockDb.query)
+      // getNextPostNumber: 既存レスがある場合（トランザクション内）
+      vi.mocked(mockClient.query)
         .mockResolvedValueOnce({
           rows: [{ max_post_number: 5 }],
           rowCount: 1,
@@ -31,7 +36,7 @@ describe('PostManager', () => {
           oid: 0,
           fields: [],
         })
-        // createPost: INSERT RETURNING
+        // createPost: INSERT RETURNING（トランザクション内）
         .mockResolvedValueOnce({
           rows: [
             {
@@ -60,15 +65,23 @@ describe('PostManager', () => {
 
       const result = await postManager.createPost(data);
 
-      // getNextPostNumber呼び出し確認
-      expect(mockDb.query).toHaveBeenNthCalledWith(
+      // トランザクション開始確認
+      expect(mockDb.beginTransaction).toHaveBeenCalled();
+
+      // getNextPostNumber呼び出し確認（FOR UPDATE付き）
+      expect(mockClient.query).toHaveBeenNthCalledWith(
         1,
         expect.stringContaining('MAX(post_number)'),
         ['uuid-123']
       );
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('FOR UPDATE'),
+        expect.any(Array)
+      );
 
       // INSERT呼び出し確認
-      expect(mockDb.query).toHaveBeenNthCalledWith(
+      expect(mockClient.query).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining('INSERT INTO posts'),
         expect.arrayContaining([
@@ -83,6 +96,9 @@ describe('PostManager', () => {
         ])
       );
 
+      // コミット確認
+      expect(mockDb.commit).toHaveBeenCalledWith(mockClient);
+
       // 返り値の検証
       expect(result).toMatchObject({
         id: 123,
@@ -94,7 +110,7 @@ describe('PostManager', () => {
     });
 
     it('should use default values', async () => {
-      vi.mocked(mockDb.query)
+      vi.mocked(mockClient.query)
         .mockResolvedValueOnce({
           rows: [{ max_post_number: null }],
           rowCount: 1,
@@ -129,7 +145,7 @@ describe('PostManager', () => {
 
       await postManager.createPost(data);
 
-      expect(mockDb.query).toHaveBeenNthCalledWith(
+      expect(mockClient.query).toHaveBeenNthCalledWith(
         2,
         expect.anything(),
         expect.arrayContaining([
@@ -146,7 +162,7 @@ describe('PostManager', () => {
     });
 
     it('should create AI post when characterId is provided', async () => {
-      vi.mocked(mockDb.query)
+      vi.mocked(mockClient.query)
         .mockResolvedValueOnce({
           rows: [{ max_post_number: 1 }],
           rowCount: 1,
@@ -217,7 +233,7 @@ describe('PostManager', () => {
 
     it('should accept maximum valid length', async () => {
       const maxContent = 'あ'.repeat(2000);
-      vi.mocked(mockDb.query)
+      vi.mocked(mockClient.query)
         .mockResolvedValueOnce({
           rows: [{ max_post_number: null }],
           rowCount: 1,
@@ -252,7 +268,8 @@ describe('PostManager', () => {
 
       await postManager.createPost(data);
 
-      expect(mockDb.query).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalled();
+      expect(mockDb.commit).toHaveBeenCalledWith(mockClient);
     });
   });
 
@@ -367,17 +384,18 @@ describe('PostManager', () => {
 
   describe('getRecentPosts', () => {
     it('should get recent posts in ascending order', async () => {
+      // サブクエリ+外側のORDER BY ASCで返される最終結果（ASC順）
       const mockRows = [
         {
-          id: 3,
+          id: 1,
           thread_id: 'uuid-123',
-          post_number: 3,
+          post_number: 1,
           author_name: '名無しさん',
           character_id: null,
-          content: '3番目',
+          content: '1番目',
           anchors: null,
           is_user_post: true,
-          created_at: new Date('2024-01-03'),
+          created_at: new Date('2024-01-01'),
         },
         {
           id: 2,
@@ -391,19 +409,19 @@ describe('PostManager', () => {
           created_at: new Date('2024-01-02'),
         },
         {
-          id: 1,
+          id: 3,
           thread_id: 'uuid-123',
-          post_number: 1,
+          post_number: 3,
           author_name: '名無しさん',
           character_id: null,
-          content: '1番目',
+          content: '3番目',
           anchors: null,
           is_user_post: true,
-          created_at: new Date('2024-01-01'),
+          created_at: new Date('2024-01-03'),
         },
       ];
 
-      // DESC順で取得されたモックデータ
+      // サブクエリを使ったSQL（DESC→ASC）の最終結果をモック
       vi.mocked(mockDb.query).mockResolvedValue({
         rows: mockRows,
         rowCount: 3,
@@ -414,12 +432,17 @@ describe('PostManager', () => {
 
       const result = await postManager.getRecentPosts('uuid-123', 3);
 
+      // サブクエリ内でDESC、外側でASC順にソート
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY post_number DESC'),
         ['uuid-123', 3]
       );
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('ORDER BY post_number ASC'),
+        expect.any(Array)
+      );
 
-      // ASC順に並び替えられていることを確認
+      // ASC順に並んでいることを確認
       expect(result).toHaveLength(3);
       expect(result[0].postNumber).toBe(1);
       expect(result[1].postNumber).toBe(2);

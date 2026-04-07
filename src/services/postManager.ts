@@ -2,6 +2,43 @@ import type { IDatabaseClient } from '../lib/dbInterface';
 import type { Post, CreatePostData } from '../types';
 
 /**
+ * 投稿内容の最大文字数
+ */
+const MAX_CONTENT_LENGTH = 2000;
+
+/**
+ * データベース行の型定義
+ */
+type PostRow = {
+  id: number;
+  thread_id: string;
+  post_number: number;
+  author_name: string;
+  character_id: string | null;
+  content: string;
+  anchors: string | null;
+  is_user_post: boolean;
+  created_at: Date;
+};
+
+/**
+ * データベース行をPost型にマッピング
+ */
+function mapRowToPost(row: PostRow): Post {
+  return {
+    id: row.id,
+    threadId: row.thread_id,
+    postNumber: row.post_number,
+    authorName: row.author_name,
+    characterId: row.character_id,
+    content: row.content,
+    anchors: row.anchors,
+    isUserPost: row.is_user_post,
+    createdAt: row.created_at,
+  };
+}
+
+/**
  * PostManager
  *
  * レスのCRUD操作を担当するサービスクラス。
@@ -18,6 +55,7 @@ export class PostManager {
    * レスを作成
    *
    * レス番号を自動採番してレスを作成
+   * トランザクション内でFOR UPDATEを使用して競合を防止
    *
    * @param data - レス作成データ
    * @returns 作成されたレス
@@ -25,12 +63,9 @@ export class PostManager {
    */
   async createPost(data: CreatePostData): Promise<Post> {
     // バリデーション
-    if (!data.content || data.content.length === 0 || data.content.length > 2000) {
-      throw new Error('投稿内容は1-2000文字である必要があります');
+    if (!data.content || data.content.length === 0 || data.content.length > MAX_CONTENT_LENGTH) {
+      throw new Error(`投稿内容は1-${MAX_CONTENT_LENGTH}文字である必要があります`);
     }
-
-    // 次のレス番号を取得
-    const postNumber = await this.getNextPostNumber(data.threadId);
 
     // デフォルト値の設定
     const authorName = data.authorName || '名無しさん';
@@ -39,36 +74,39 @@ export class PostManager {
     const anchors = data.anchors || null;
     const now = new Date();
 
-    // レス作成
-    const result = await this.db.query<{
-      id: number;
-      thread_id: string;
-      post_number: number;
-      author_name: string;
-      character_id: string | null;
-      content: string;
-      anchors: string | null;
-      is_user_post: boolean;
-      created_at: Date;
-    }>(
-      `INSERT INTO posts (thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at`,
-      [data.threadId, postNumber, authorName, characterId, data.content, anchors, isUserPost, now]
-    );
+    // トランザクション開始
+    const client = await this.db.beginTransaction();
 
-    const row = result.rows[0];
-    return {
-      id: row.id,
-      threadId: row.thread_id,
-      postNumber: row.post_number,
-      authorName: row.author_name,
-      characterId: row.character_id,
-      content: row.content,
-      anchors: row.anchors,
-      isUserPost: row.is_user_post,
-      createdAt: row.created_at,
-    };
+    try {
+      // 次のレス番号を取得（FOR UPDATEで排他ロック）
+      const maxResult = await client.query<{ max_post_number: number | null }>(
+        `SELECT MAX(post_number) as max_post_number
+         FROM posts
+         WHERE thread_id = $1
+         FOR UPDATE`,
+        [data.threadId]
+      );
+
+      const maxPostNumber = maxResult.rows[0]?.max_post_number;
+      const postNumber = maxPostNumber ? maxPostNumber + 1 : 1;
+
+      // レス作成
+      const result = await client.query<PostRow>(
+        `INSERT INTO posts (thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at`,
+        [data.threadId, postNumber, authorName, characterId, data.content, anchors, isUserPost, now]
+      );
+
+      // コミット
+      await this.db.commit(client);
+
+      return mapRowToPost(result.rows[0]);
+    } catch (error) {
+      // ロールバック
+      await this.db.rollback(client);
+      throw error;
+    }
   }
 
   /**
@@ -91,30 +129,9 @@ export class PostManager {
          ORDER BY post_number ASC`;
 
     const params = limit ? [threadId, limit] : [threadId];
+    const result = await this.db.query<PostRow>(sql, params);
 
-    const result = await this.db.query<{
-      id: number;
-      thread_id: string;
-      post_number: number;
-      author_name: string;
-      character_id: string | null;
-      content: string;
-      anchors: string | null;
-      is_user_post: boolean;
-      created_at: Date;
-    }>(sql, params);
-
-    return result.rows.map((row) => ({
-      id: row.id,
-      threadId: row.thread_id,
-      postNumber: row.post_number,
-      authorName: row.author_name,
-      characterId: row.character_id,
-      content: row.content,
-      anchors: row.anchors,
-      isUserPost: row.is_user_post,
-      createdAt: row.created_at,
-    }));
+    return result.rows.map(mapRowToPost);
   }
 
   /**
@@ -147,38 +164,20 @@ export class PostManager {
    * @returns 最新N件のレス（post_number昇順）
    */
   async getRecentPosts(threadId: string, limit: number = 20): Promise<Post[]> {
-    const result = await this.db.query<{
-      id: number;
-      thread_id: string;
-      post_number: number;
-      author_name: string;
-      character_id: string | null;
-      content: string;
-      anchors: string | null;
-      is_user_post: boolean;
-      created_at: Date;
-    }>(
+    // サブクエリでDESC順に取得し、外側のクエリでASC順に並び替え
+    const result = await this.db.query<PostRow>(
       `SELECT id, thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at
-       FROM posts
-       WHERE thread_id = $1
-       ORDER BY post_number DESC
-       LIMIT $2`,
+       FROM (
+         SELECT id, thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at
+         FROM posts
+         WHERE thread_id = $1
+         ORDER BY post_number DESC
+         LIMIT $2
+       ) AS recent_posts
+       ORDER BY post_number ASC`,
       [threadId, limit]
     );
 
-    // DESC順で取得したものをASC順に並び替え
-    return result.rows
-      .reverse()
-      .map((row) => ({
-        id: row.id,
-        threadId: row.thread_id,
-        postNumber: row.post_number,
-        authorName: row.author_name,
-        characterId: row.character_id,
-        content: row.content,
-        anchors: row.anchors,
-        isUserPost: row.is_user_post,
-        createdAt: row.created_at,
-      }));
+    return result.rows.map(mapRowToPost);
   }
 }

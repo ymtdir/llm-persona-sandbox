@@ -60,13 +60,12 @@ export const ThreadList: FC<ThreadListProps> = ({ threads, onNewThread }) => {
     <div class="thread-list-container">
       {/* 新規スレッド作成ボタン */}
       <div style="margin-bottom: 15px; text-align: right;">
-        <button
-          type="button"
-          onclick={onNewThread ? `window.location.href='/threads/new'` : undefined}
-          style="font-weight: bold;"
+        <a
+          href="/threads/new"
+          style="font-weight: bold; text-decoration: none; display: inline-block; padding: 4px 20px; background-color: #f0f0f0; border: 2px outset #dddddd; color: #000000;"
         >
           新しいスレッドを立てる
-        </button>
+        </a>
       </div>
 
       {/* スレッド一覧 */}

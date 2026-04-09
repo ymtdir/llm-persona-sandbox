@@ -246,15 +246,15 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
         `}</style>
       </head>
       <body>
-        <div class="container">
-          <div class="header">
+        <main class="container">
+          <header class="header">
             <h1>{title}</h1>
-          </div>
+          </header>
           {children}
-          <div class="footer">
+          <footer class="footer">
             <p>2ch風掲示板システム - Hono + JSX実装</p>
-          </div>
-        </div>
+          </footer>
+        </main>
       </body>
     </html>
   );

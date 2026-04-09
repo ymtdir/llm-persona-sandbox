@@ -10,14 +10,13 @@ export interface Thread {
 
 interface ThreadListProps {
   threads: Thread[];
-  onNewThread?: () => void;
 }
 
 /**
  * スレッド一覧表示コンポーネント
  * 各スレッドのタイトル、レス数、最終レス日時を表示
  */
-export const ThreadList: FC<ThreadListProps> = ({ threads, onNewThread }) => {
+export const ThreadList: FC<ThreadListProps> = ({ threads }) => {
   /**
    * 日時を2ch風フォーマットに変換
    */

@@ -4,6 +4,8 @@ import { DatabaseClient } from '../lib/db';
 import { ThreadManager } from '../services/threadManager';
 import { PostManager } from '../services/postManager';
 import { ResponseGenerator } from '../services/responseGenerator';
+import { CharacterSelector } from '../services/characterSelector';
+import { OllamaClient } from '../services/ollamaClient';
 import { Layout } from '../views/Layout';
 import { ThreadList, type Thread as ViewThread } from '../views/ThreadList';
 import { ThreadDetail, type ThreadDetailData, type Post as ViewPost } from '../views/ThreadDetail';
@@ -19,7 +21,9 @@ export const threadsRouter = new Hono();
 const db = new DatabaseClient();
 const threadManager = new ThreadManager(db);
 const postManager = new PostManager(db);
-const responseGenerator = new ResponseGenerator();
+const characterSelector = new CharacterSelector();
+const ollamaClient = new OllamaClient();
+const responseGenerator = new ResponseGenerator(characterSelector, ollamaClient, postManager);
 
 /**
  * GET /threads
@@ -259,8 +263,13 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
     });
 
     // AIレス生成を非同期で開始（エラーが発生しても投稿は成功とする）
-    responseGenerator
-      .generateResponses(threadId, post.postNumber, content)
+    // スレッド履歴を取得してAIレス生成
+    postManager
+      .getPostsByThread(threadId)
+      .then((allPosts) => {
+        const threadHistory = allPosts.filter((p) => p.postNumber < post.postNumber);
+        return responseGenerator.generateResponses(threadId, post, threadHistory);
+      })
       .catch((error) => {
         console.error('[ERROR] Failed to generate AI responses:', error);
       });

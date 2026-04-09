@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
+import { DatabaseClient } from '../lib/db';
 import { ThreadManager } from '../services/threadManager';
 import { PostManager } from '../services/postManager';
 import { ResponseGenerator } from '../services/responseGenerator';
 import { Layout } from '../views/Layout';
-import { ThreadList, type Thread } from '../views/ThreadList';
-import { ThreadDetail, type ThreadDetailData } from '../views/ThreadDetail';
+import { ThreadList, type Thread as ViewThread } from '../views/ThreadList';
+import { ThreadDetail, type ThreadDetailData, type Post as ViewPost } from '../views/ThreadDetail';
 import { createThreadSchema, createPostSchema } from './validation';
 
 /**
@@ -15,8 +16,9 @@ import { createThreadSchema, createPostSchema } from './validation';
  */
 export const threadsRouter = new Hono();
 
-const threadManager = new ThreadManager();
-const postManager = new PostManager();
+const db = new DatabaseClient();
+const threadManager = new ThreadManager(db);
+const postManager = new PostManager(db);
 const responseGenerator = new ResponseGenerator();
 
 /**
@@ -27,14 +29,14 @@ const responseGenerator = new ResponseGenerator();
  */
 threadsRouter.get('/', async (c) => {
   try {
-    const dbThreads = await threadManager.listThreads({ limit: 50 });
+    const dbThreads = await threadManager.listThreads(50);
 
     // DBのスレッドをビュー用の型に変換
-    const threads: Thread[] = dbThreads.map((t) => ({
+    const threads: ViewThread[] = dbThreads.map((t) => ({
       id: t.id,
       title: t.title,
-      resCount: t.resCount,
-      lastResAt: t.lastResAt,
+      resCount: t.postCount,
+      lastResAt: t.lastPostAt,
       createdAt: t.createdAt,
     }));
 
@@ -85,12 +87,12 @@ threadsRouter.get('/:id', async (c) => {
     const thread: ThreadDetailData = {
       id: dbThread.id,
       title: dbThread.title,
-      isLocked: dbThread.isLocked,
+      isLocked: dbThread.postCount >= 1000,
       posts: dbPosts.map((p) => ({
-        id: p.id,
-        number: p.number,
-        name: p.name || '名無しさん',
-        email: p.email,
+        id: String(p.id),
+        number: p.postNumber,
+        name: p.authorName || '名無しさん',
+        email: undefined,
         content: p.content,
         createdAt: p.createdAt,
         threadId: p.threadId,
@@ -187,19 +189,10 @@ threadsRouter.get('/new', async (c) => {
  */
 threadsRouter.post('/', zValidator('form', createThreadSchema), async (c) => {
   try {
-    const { title, name, email, content } = c.req.valid('form');
+    const { title, name, content } = c.req.valid('form');
 
-    // スレッド作成
-    const thread = await threadManager.createThread(title);
-
-    // 初回投稿作成
-    await postManager.createPost({
-      threadId: thread.id,
-      name: name || '名無しさん',
-      email: email || undefined,
-      content,
-      isAiGenerated: false,
-    });
+    // スレッドと初回投稿を同時作成
+    const thread = await threadManager.createThread(title, content, name || '名無しさん');
 
     // スレッド詳細にリダイレクト
     return c.redirect(`/threads/${thread.id}`);
@@ -228,7 +221,7 @@ threadsRouter.post('/', zValidator('form', createThreadSchema), async (c) => {
 threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c) => {
   try {
     const threadId = c.req.param('id');
-    const { name, email, content } = c.req.valid('form');
+    const { name, content } = c.req.valid('form');
 
     // スレッド存在チェック
     const thread = await threadManager.getThread(threadId);
@@ -244,11 +237,11 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
       );
     }
 
-    // スレッドがロックされているかチェック
-    if (thread.isLocked) {
+    // スレッドがロックされているかチェック（1000レス到達）
+    if (thread.postCount >= 1000) {
       return c.html(
         <Layout title="エラー - 2ch風掲示板">
-          <div class="error-message">このスレッドはロックされています。</div>
+          <div class="error-message">このスレッドは1000レスに到達しています。</div>
           <div style="margin-top: 20px; text-align: center;">
             <a href={`/threads/${threadId}`}>スレッドに戻る</a>
           </div>
@@ -260,19 +253,20 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
     // レス投稿
     const post = await postManager.createPost({
       threadId,
-      name: name || '名無しさん',
-      email: email || undefined,
+      authorName: name || '名無しさん',
       content,
-      isAiGenerated: false,
+      isUserPost: true,
     });
 
     // AIレス生成を非同期で開始（エラーが発生しても投稿は成功とする）
-    responseGenerator.generateResponses(threadId, post.number).catch((error) => {
-      console.error('[ERROR] Failed to generate AI responses:', error);
-    });
+    responseGenerator
+      .generateResponses(threadId, post.postNumber, content)
+      .catch((error) => {
+        console.error('[ERROR] Failed to generate AI responses:', error);
+      });
 
     // スレッド詳細にリダイレクト
-    return c.redirect(`/threads/${threadId}#post-${post.number}`);
+    return c.redirect(`/threads/${threadId}#post-${post.postNumber}`);
   } catch (error) {
     console.error('[ERROR] Failed to create post:', error);
     const threadId = c.req.param('id');

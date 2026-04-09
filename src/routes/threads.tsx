@@ -1,29 +1,30 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { DatabaseClient } from '../lib/db';
-import { ThreadManager } from '../services/threadManager';
-import { PostManager } from '../services/postManager';
-import { ResponseGenerator } from '../services/responseGenerator';
-import { CharacterSelector } from '../services/characterSelector';
-import { OllamaClient } from '../services/ollamaClient';
+import type { ThreadManager } from '../services/threadManager';
+import type { PostManager } from '../services/postManager';
+import type { ResponseGenerator } from '../services/responseGenerator';
 import { Layout } from '../views/Layout';
 import { ThreadList, type Thread as ViewThread } from '../views/ThreadList';
 import { ThreadDetail, type ThreadDetailData } from '../views/ThreadDetail';
+import { ErrorPage } from '../views/ErrorPage';
 import { createThreadSchema, createPostSchema } from './validation';
 
 /**
- * スレッドルーター
+ * スレッドルーターファクトリー
  *
- * スレッド関連のエンドポイントを提供
+ * 依存性注入パターンを使用してスレッド関連のエンドポイントを提供
+ *
+ * @param threadManager - スレッド管理サービス
+ * @param postManager - レス管理サービス
+ * @param responseGenerator - AI応答生成サービス
+ * @returns スレッドルーター
  */
-export const threadsRouter = new Hono();
-
-const db = new DatabaseClient();
-const threadManager = new ThreadManager(db);
-const postManager = new PostManager(db);
-const characterSelector = new CharacterSelector();
-const ollamaClient = new OllamaClient();
-const responseGenerator = new ResponseGenerator(characterSelector, ollamaClient, postManager);
+export function createThreadsRouter(
+  threadManager: ThreadManager,
+  postManager: PostManager,
+  responseGenerator: ResponseGenerator
+): Hono {
+  const threadsRouter = new Hono();
 
 /**
  * GET /threads
@@ -52,11 +53,7 @@ threadsRouter.get('/', async (c) => {
   } catch (error) {
     console.error('[ERROR] Failed to list threads:', error);
     return c.html(
-      <Layout title="エラー - 2ch風掲示板">
-        <div class="error-message">
-          スレッド一覧の取得に失敗しました。時間をおいて再度お試しください。
-        </div>
-      </Layout>,
+      <ErrorPage message="スレッド一覧の取得に失敗しました。時間をおいて再度お試しください。" />,
       500
     );
   }
@@ -75,12 +72,11 @@ threadsRouter.get('/:id', async (c) => {
     const dbThread = await threadManager.getThread(threadId);
     if (!dbThread) {
       return c.html(
-        <Layout title="エラー - 2ch風掲示板">
-          <div class="error-message">指定されたスレッドが見つかりません。</div>
-          <div style="margin-top: 20px; text-align: center;">
-            <a href="/threads">スレッド一覧に戻る</a>
-          </div>
-        </Layout>,
+        <ErrorPage
+          message="指定されたスレッドが見つかりません。"
+          linkUrl="/threads"
+          linkText="スレッド一覧に戻る"
+        />,
         404
       );
     }
@@ -111,14 +107,11 @@ threadsRouter.get('/:id', async (c) => {
   } catch (error) {
     console.error('[ERROR] Failed to get thread:', error);
     return c.html(
-      <Layout title="エラー - 2ch風掲示板">
-        <div class="error-message">
-          スレッドの取得に失敗しました。時間をおいて再度お試しください。
-        </div>
-        <div style="margin-top: 20px; text-align: center;">
-          <a href="/threads">スレッド一覧に戻る</a>
-        </div>
-      </Layout>,
+      <ErrorPage
+        message="スレッドの取得に失敗しました。時間をおいて再度お試しください。"
+        linkUrl="/threads"
+        linkText="スレッド一覧に戻る"
+      />,
       500
     );
   }
@@ -203,14 +196,11 @@ threadsRouter.post('/', zValidator('form', createThreadSchema), async (c) => {
   } catch (error) {
     console.error('[ERROR] Failed to create thread:', error);
     return c.html(
-      <Layout title="エラー - 2ch風掲示板">
-        <div class="error-message">
-          スレッドの作成に失敗しました。時間をおいて再度お試しください。
-        </div>
-        <div style="margin-top: 20px; text-align: center;">
-          <a href="/threads/new">戻る</a>
-        </div>
-      </Layout>,
+      <ErrorPage
+        message="スレッドの作成に失敗しました。時間をおいて再度お試しください。"
+        linkUrl="/threads/new"
+        linkText="戻る"
+      />,
       500
     );
   }
@@ -231,12 +221,11 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
     const thread = await threadManager.getThread(threadId);
     if (!thread) {
       return c.html(
-        <Layout title="エラー - 2ch風掲示板">
-          <div class="error-message">指定されたスレッドが見つかりません。</div>
-          <div style="margin-top: 20px; text-align: center;">
-            <a href="/threads">スレッド一覧に戻る</a>
-          </div>
-        </Layout>,
+        <ErrorPage
+          message="指定されたスレッドが見つかりません。"
+          linkUrl="/threads"
+          linkText="スレッド一覧に戻る"
+        />,
         404
       );
     }
@@ -244,15 +233,17 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
     // スレッドがロックされているかチェック（1000レス到達）
     if (thread.postCount >= 1000) {
       return c.html(
-        <Layout title="エラー - 2ch風掲示板">
-          <div class="error-message">このスレッドは1000レスに到達しています。</div>
-          <div style="margin-top: 20px; text-align: center;">
-            <a href={`/threads/${threadId}`}>スレッドに戻る</a>
-          </div>
-        </Layout>,
+        <ErrorPage
+          message="このスレッドは1000レスに到達しています。"
+          linkUrl={`/threads/${threadId}`}
+          linkText="スレッドに戻る"
+        />,
         403
       );
     }
+
+    // スレッド履歴を事前に取得（AI応答生成用）
+    const threadHistory = await postManager.getPostsByThread(threadId);
 
     // レス投稿
     const post = await postManager.createPost({
@@ -263,13 +254,8 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
     });
 
     // AIレス生成を非同期で開始（エラーが発生しても投稿は成功とする）
-    // スレッド履歴を取得してAIレス生成
-    postManager
-      .getPostsByThread(threadId)
-      .then((allPosts) => {
-        const threadHistory = allPosts.filter((p) => p.postNumber < post.postNumber);
-        return responseGenerator.generateResponses(threadId, post, threadHistory);
-      })
+    responseGenerator
+      .generateResponses(threadId, post, threadHistory)
       .catch((error) => {
         console.error('[ERROR] Failed to generate AI responses:', error);
       });
@@ -280,15 +266,15 @@ threadsRouter.post('/:id/posts', zValidator('form', createPostSchema), async (c)
     console.error('[ERROR] Failed to create post:', error);
     const threadId = c.req.param('id');
     return c.html(
-      <Layout title="エラー - 2ch風掲示板">
-        <div class="error-message">
-          レスの投稿に失敗しました。時間をおいて再度お試しください。
-        </div>
-        <div style="margin-top: 20px; text-align: center;">
-          <a href={`/threads/${threadId}`}>スレッドに戻る</a>
-        </div>
-      </Layout>,
+      <ErrorPage
+        message="レスの投稿に失敗しました。時間をおいて再度お試しください。"
+        linkUrl={`/threads/${threadId}`}
+        linkText="スレッドに戻る"
+      />,
       500
     );
   }
 });
+
+  return threadsRouter;
+}

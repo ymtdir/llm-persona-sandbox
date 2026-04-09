@@ -9,6 +9,10 @@ export const createThreadSchema = z.object({
     .min(1, 'タイトルは1文字以上入力してください')
     .max(100, 'タイトルは100文字以内で入力してください'),
   name: z.string().max(64, '名前は64文字以内で入力してください').optional(),
+  // TODO: emailフィールドは現在データベースに保存されていません
+  // 将来的に以下のいずれかの実装が必要:
+  // 1. postsテーブルにemail列を追加してmailtoリンク機能を実装
+  // 2. sage機能（emailに"sage"を入力するとスレッドを上げない）の実装
   email: z.string().email('正しいメールアドレスを入力してください').max(64).optional().or(z.literal('')),
   content: z
     .string()
@@ -21,6 +25,10 @@ export const createThreadSchema = z.object({
  */
 export const createPostSchema = z.object({
   name: z.string().max(64, '名前は64文字以内で入力してください').optional(),
+  // TODO: emailフィールドは現在データベースに保存されていません
+  // 将来的に以下のいずれかの実装が必要:
+  // 1. postsテーブルにemail列を追加してmailtoリンク機能を実装
+  // 2. sage機能（emailに"sage"を入力するとスレッドを上げない）の実装
   email: z.string().email('正しいメールアドレスを入力してください').max(64).optional().or(z.literal('')),
   content: z
     .string()

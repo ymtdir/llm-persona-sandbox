@@ -2,7 +2,13 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
-import { threadsRouter } from './routes/threads';
+import { createThreadsRouter } from './routes/threads';
+import { DatabaseClient } from './lib/db';
+import { ThreadManager } from './services/threadManager';
+import { PostManager } from './services/postManager';
+import { ResponseGenerator } from './services/responseGenerator';
+import { CharacterSelector } from './services/characterSelector';
+import { OllamaClient } from './services/ollamaClient';
 
 /**
  * Honoアプリケーション
@@ -36,6 +42,16 @@ app.onError((err, c) => {
 });
 
 /**
+ * 依存性注入 - サービスのインスタンス化
+ */
+const db = new DatabaseClient();
+const threadManager = new ThreadManager(db);
+const postManager = new PostManager(db);
+const characterSelector = new CharacterSelector();
+const ollamaClient = new OllamaClient();
+const responseGenerator = new ResponseGenerator(characterSelector, ollamaClient, postManager);
+
+/**
  * ルート定義
  */
 
@@ -48,7 +64,8 @@ app.get('/', (c) => {
   });
 });
 
-// スレッドルートのマウント
+// スレッドルートのマウント（依存性注入）
+const threadsRouter = createThreadsRouter(threadManager, postManager, responseGenerator);
 app.route('/threads', threadsRouter);
 
 /**

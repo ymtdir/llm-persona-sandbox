@@ -17,6 +17,13 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{title}</title>
         <style>{`
+          /* CSS変数定義 */
+          :root {
+            --form-label-width: 80px;
+            --form-input-width: 200px;
+            --form-textarea-width: 400px;
+          }
+
           /* 2ch風基本スタイル */
           * {
             margin: 0;
@@ -153,7 +160,7 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
 
           .form-label {
             display: inline-block;
-            width: 80px;
+            width: var(--form-label-width);
             font-weight: bold;
           }
 
@@ -170,12 +177,12 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
           input[type="text"],
           input[type="email"] {
             width: 100%;
-            max-width: 200px;
+            max-width: var(--form-input-width);
           }
 
           textarea {
             width: 100%;
-            max-width: 400px;
+            max-width: var(--form-textarea-width);
             height: 100px;
             vertical-align: top;
           }

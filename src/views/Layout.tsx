@@ -31,6 +31,10 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
             box-sizing: border-box;
           }
 
+          html {
+            scroll-behavior: smooth;
+          }
+
           body {
             font-family: "MS PGothic", "Osaka-Mono", "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif;
             font-size: 14px;

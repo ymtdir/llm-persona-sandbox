@@ -77,9 +77,8 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
       const postNumber = match[1];
       parts.push(
         <a
-          href={`#${postNumber}`}
+          href={`#post-${postNumber}`}
           class="post-anchor"
-          onclick={`event.preventDefault(); document.getElementById('post-${postNumber}')?.scrollIntoView({ behavior: 'smooth' });`}
         >
           &gt;&gt;{postNumber}
         </a>

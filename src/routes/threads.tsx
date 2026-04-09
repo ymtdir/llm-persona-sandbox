@@ -8,7 +8,7 @@ import { CharacterSelector } from '../services/characterSelector';
 import { OllamaClient } from '../services/ollamaClient';
 import { Layout } from '../views/Layout';
 import { ThreadList, type Thread as ViewThread } from '../views/ThreadList';
-import { ThreadDetail, type ThreadDetailData, type Post as ViewPost } from '../views/ThreadDetail';
+import { ThreadDetail, type ThreadDetailData } from '../views/ThreadDetail';
 import { createThreadSchema, createPostSchema } from './validation';
 
 /**

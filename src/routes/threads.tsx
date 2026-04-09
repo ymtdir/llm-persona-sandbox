@@ -60,66 +60,11 @@ threadsRouter.get('/', async (c) => {
 });
 
 /**
- * GET /threads/:id
- * スレッド詳細表示
- *
- * 指定されたIDのスレッドと全レスを取得
- */
-threadsRouter.get('/:id', async (c) => {
-  try {
-    const threadId = c.req.param('id');
-
-    const dbThread = await threadManager.getThread(threadId);
-    if (!dbThread) {
-      return c.html(
-        <ErrorPage
-          message="指定されたスレッドが見つかりません。"
-          linkUrl="/threads"
-          linkText="スレッド一覧に戻る"
-        />,
-        404
-      );
-    }
-
-    const dbPosts = await postManager.getPostsByThread(threadId);
-
-    // DBの投稿をビュー用の型に変換
-    const thread: ThreadDetailData = {
-      id: dbThread.id,
-      title: dbThread.title,
-      isLocked: dbThread.postCount >= 1000,
-      posts: dbPosts.map((p) => ({
-        id: String(p.id),
-        number: p.postNumber,
-        name: p.authorName || '名無しさん',
-        email: undefined,
-        content: p.content,
-        createdAt: p.createdAt,
-        threadId: p.threadId,
-      })),
-    };
-
-    return c.html(
-      <Layout title={`${dbThread.title} - 2ch風掲示板`}>
-        <ThreadDetail thread={thread} />
-      </Layout>
-    );
-  } catch (error) {
-    console.error('[ERROR] Failed to get thread:', error);
-    return c.html(
-      <ErrorPage
-        message="スレッドの取得に失敗しました。時間をおいて再度お試しください。"
-        linkUrl="/threads"
-        linkText="スレッド一覧に戻る"
-      />,
-      500
-    );
-  }
-});
-
-/**
  * GET /threads/new
  * 新規スレッド作成フォーム表示
+ *
+ * NOTE: このルートは /threads/:id よりも前に定義する必要があります
+ * （より具体的なパターンを先にマッチさせるため）
  */
 threadsRouter.get('/new', async (c) => {
   return c.html(
@@ -176,6 +121,64 @@ threadsRouter.get('/new', async (c) => {
       </div>
     </Layout>
   );
+});
+
+/**
+ * GET /threads/:id
+ * スレッド詳細表示
+ *
+ * 指定されたIDのスレッドと全レスを取得
+ */
+threadsRouter.get('/:id', async (c) => {
+  try {
+    const threadId = c.req.param('id');
+
+    const dbThread = await threadManager.getThread(threadId);
+    if (!dbThread) {
+      return c.html(
+        <ErrorPage
+          message="指定されたスレッドが見つかりません。"
+          linkUrl="/threads"
+          linkText="スレッド一覧に戻る"
+        />,
+        404
+      );
+    }
+
+    const dbPosts = await postManager.getPostsByThread(threadId);
+
+    // DBの投稿をビュー用の型に変換
+    const thread: ThreadDetailData = {
+      id: dbThread.id,
+      title: dbThread.title,
+      isLocked: dbThread.postCount >= 1000,
+      posts: dbPosts.map((p) => ({
+        id: String(p.id),
+        number: p.postNumber,
+        name: p.authorName || '名無しさん',
+        email: undefined,
+        content: p.content,
+        createdAt: p.createdAt,
+        threadId: p.threadId,
+      })),
+    };
+
+    return c.html(
+      <Layout title={`${dbThread.title} - 2ch風掲示板`}>
+        <ThreadDetail thread={thread} />
+      </Layout>
+    );
+  } catch (error) {
+    console.error('[ERROR] Failed to get thread:', error);
+    return c.html(
+      <ErrorPage
+        message="スレッドの取得に失敗しました。時間をおいて再度お試しください。"
+        linkUrl="/threads"
+        linkText="スレッド一覧に戻る"
+      />,
+      500
+    );
+  }
 });
 
 /**

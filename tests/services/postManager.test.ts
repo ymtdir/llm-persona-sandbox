@@ -27,10 +27,10 @@ describe('PostManager', () => {
 
   describe('createPost', () => {
     it('should create post with auto-incremented post_number', async () => {
-      // getNextPostNumber: 既存レスがある場合（トランザクション内）
+      // SELECT post_count FROM threads（トランザクション内）
       vi.mocked(mockClient.query)
         .mockResolvedValueOnce({
-          rows: [{ max_post_number: 5 }],
+          rows: [{ post_count: 5 }],
           rowCount: 1,
           command: 'SELECT',
           oid: 0,
@@ -55,6 +55,14 @@ describe('PostManager', () => {
           command: 'INSERT',
           oid: 0,
           fields: [],
+        })
+        // UPDATE threads（トランザクション内）
+        .mockResolvedValueOnce({
+          rows: [],
+          rowCount: 1,
+          command: 'UPDATE',
+          oid: 0,
+          fields: [],
         });
 
       const data: CreatePostData = {
@@ -68,10 +76,10 @@ describe('PostManager', () => {
       // トランザクション開始確認
       expect(mockDb.beginTransaction).toHaveBeenCalled();
 
-      // getNextPostNumber呼び出し確認（FOR UPDATE付き）
+      // スレッドのpost_count取得確認（FOR UPDATE付き）
       expect(mockClient.query).toHaveBeenNthCalledWith(
         1,
-        expect.stringContaining('MAX(post_number)'),
+        expect.stringContaining('SELECT post_count'),
         ['uuid-123']
       );
       expect(mockClient.query).toHaveBeenNthCalledWith(
@@ -93,6 +101,17 @@ describe('PostManager', () => {
           null, // anchors
           true, // is_user_post
           expect.any(Date),
+        ])
+      );
+
+      // UPDATE threads呼び出し確認
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining('UPDATE threads'),
+        expect.arrayContaining([
+          6, // post_count
+          expect.any(Date), // last_post_at
+          'uuid-123', // thread_id
         ])
       );
 

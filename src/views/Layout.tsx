@@ -221,6 +221,15 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
             color: #800080;
           }
 
+          /* フォーカスインジケーター（アクセシビリティ） */
+          a:focus,
+          button:focus,
+          input:focus,
+          textarea:focus {
+            outline: 2px solid #0066cc;
+            outline-offset: 2px;
+          }
+
           /* エラーメッセージ */
           .error-message {
             color: #ff0000;

@@ -157,7 +157,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
             onsubmit={onSubmitPost ? `event.preventDefault(); ${onSubmitPost.toString()}(this);` : undefined}
           >
             <div class="form-group">
-              <label for="name" class="form-label">名前:</label>
+              <label htmlFor="name" class="form-label">名前:</label>
               <input
                 type="text"
                 id="name"
@@ -168,7 +168,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
             </div>
 
             <div class="form-group">
-              <label for="email" class="form-label">E-mail:</label>
+              <label htmlFor="email" class="form-label">E-mail:</label>
               <input
                 type="email"
                 id="email"
@@ -182,7 +182,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
             </div>
 
             <div class="form-group">
-              <label for="content" class="form-label">内容:</label>
+              <label htmlFor="content" class="form-label">内容:</label>
               <textarea
                 id="content"
                 name="content"

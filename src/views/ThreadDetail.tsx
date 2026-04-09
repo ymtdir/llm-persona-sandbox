@@ -29,6 +29,17 @@ interface ThreadDetailProps {
  */
 export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) => {
   /**
+   * 投稿IDを生成（日付ベースの簡易ID）
+   */
+  const generatePostId = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const idSeed = `${year}${month}${day}${Math.floor(Math.random() * 10000)}`;
+    return btoa(idSeed).substring(0, 8);
+  };
+
+  /**
    * 日時を2ch風フォーマットに変換
    */
   const formatDateTime = (date: Date): string => {
@@ -43,11 +54,9 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
     const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
     const weekDay = weekDays[d.getDay()];
 
-    // IDを生成（日付ベースの簡易ID）
-    const idSeed = `${year}${month}${day}${Math.floor(Math.random() * 10000)}`;
-    const simpleId = btoa(idSeed).substring(0, 8);
+    const postId = generatePostId(d);
 
-    return `${year}/${month}/${day}(${weekDay}) ${hour}:${minute}:${second}.${String(d.getMilliseconds()).padStart(3, '0')} ID:${simpleId}`;
+    return `${year}/${month}/${day}(${weekDay}) ${hour}:${minute}:${second}.${String(d.getMilliseconds()).padStart(3, '0')} ID:${postId}`;
   };
 
   /**

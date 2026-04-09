@@ -1,4 +1,4 @@
-import { JSX, FC } from 'hono/jsx';
+import { FC } from 'hono/jsx';
 
 export interface Thread {
   id: string;

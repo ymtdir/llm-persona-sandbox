@@ -1,4 +1,5 @@
-import { JSX, FC } from 'hono/jsx';
+import { FC } from 'hono/jsx';
+import type { Child } from 'hono/jsx';
 
 export interface Post {
   id: string;
@@ -52,10 +53,10 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
   /**
    * 投稿内容をレンダリング（アンカーリンクを変換）
    */
-  const renderContent = (content: string): JSX.Element => {
+  const renderContent = (content: string): Child => {
     // >>番号 形式のアンカーを検出してリンクに変換
     const anchorPattern = /&gt;&gt;(\d+)/g;
-    const parts: (string | JSX.Element)[] = [];
+    const parts: (string | Child)[] = [];
     let lastIndex = 0;
     let match;
 
@@ -98,7 +99,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
   /**
    * 投稿者名の表示（メール欄がある場合はリンクに）
    */
-  const renderName = (post: Post): JSX.Element => {
+  const renderName = (post: Post): Child => {
     const displayName = post.name || '名無しさん';
 
     if (post.email) {
@@ -152,7 +153,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
           </h3>
           <form
             action={`/threads/${thread.id}/posts`}
-            method="POST"
+            method="post"
             onsubmit={onSubmitPost ? `event.preventDefault(); ${onSubmitPost.toString()}(this);` : undefined}
           >
             <div class="form-group">
@@ -162,7 +163,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
                 id="name"
                 name="name"
                 placeholder="名無しさん"
-                maxlength="64"
+                maxlength={64}
               />
             </div>
 
@@ -173,7 +174,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
                 id="email"
                 name="email"
                 placeholder="sage"
-                maxlength="64"
+                maxlength={64}
               />
               <span style="margin-left: 10px; font-size: 12px; color: #666666;">
                 (省略可)
@@ -186,7 +187,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
                 id="content"
                 name="content"
                 required
-                maxlength="2000"
+                maxlength={2000}
                 placeholder="投稿内容を入力してください"
               ></textarea>
             </div>

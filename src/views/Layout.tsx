@@ -1,8 +1,8 @@
-import { JSX, FC } from 'hono/jsx';
+import { FC } from 'hono/jsx';
+import { PropsWithChildren } from 'hono/jsx';
 
-interface LayoutProps {
+interface LayoutProps extends PropsWithChildren {
   title?: string;
-  children: JSX.Element | JSX.Element[];
 }
 
 /**

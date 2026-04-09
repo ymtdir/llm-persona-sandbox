@@ -169,11 +169,13 @@ export const Layout: FC<LayoutProps> = ({ title = '2ch風掲示板', children })
 
           input[type="text"],
           input[type="email"] {
-            width: 200px;
+            width: 100%;
+            max-width: 200px;
           }
 
           textarea {
-            width: 400px;
+            width: 100%;
+            max-width: 400px;
             height: 100px;
             vertical-align: top;
           }

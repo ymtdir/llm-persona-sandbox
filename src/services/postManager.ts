@@ -78,17 +78,16 @@ export class PostManager {
     const client = await this.db.beginTransaction();
 
     try {
-      // 次のレス番号を取得（FOR UPDATEで排他ロック）
-      const maxResult = await client.query<{ max_post_number: number | null }>(
-        `SELECT MAX(post_number) as max_post_number
-         FROM posts
-         WHERE thread_id = $1
+      // スレッドをロックして次のレス番号を計算
+      const threadResult = await client.query<{ post_count: number }>(
+        `SELECT post_count
+         FROM threads
+         WHERE id = $1
          FOR UPDATE`,
         [data.threadId]
       );
 
-      const maxPostNumber = maxResult.rows[0]?.max_post_number;
-      const postNumber = maxPostNumber ? maxPostNumber + 1 : 1;
+      const postNumber = (threadResult.rows[0]?.post_count || 0) + 1;
 
       // レス作成
       const result = await client.query<PostRow>(
@@ -96,6 +95,14 @@ export class PostManager {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, thread_id, post_number, author_name, character_id, content, anchors, is_user_post, created_at`,
         [data.threadId, postNumber, authorName, characterId, data.content, anchors, isUserPost, now]
+      );
+
+      // スレッドのpost_countとlast_post_atを更新
+      await client.query(
+        `UPDATE threads
+         SET post_count = $1, last_post_at = $2
+         WHERE id = $3`,
+        [postNumber, now, data.threadId]
       );
 
       // コミット

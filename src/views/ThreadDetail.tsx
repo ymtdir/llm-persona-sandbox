@@ -29,20 +29,34 @@ interface ThreadDetailProps {
  */
 export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) => {
   /**
-   * 投稿IDを生成（日付ベースの簡易ID）
+   * 投稿IDを生成（投稿者名と日付ベースの一貫したID）
+   * 同じ投稿者は同じ日に同じIDを持つ（2ch風）
    */
-  const generatePostId = (date: Date): string => {
+  const generatePostId = (authorName: string, date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const idSeed = `${year}${month}${day}${Math.floor(Math.random() * 10000)}`;
-    return btoa(idSeed).substring(0, 8);
+
+    // 投稿者名と日付を組み合わせてハッシュを生成
+    const idSeed = `${authorName}${year}${month}${day}`;
+
+    // 簡易的なハッシュ関数
+    let hash = 0;
+    for (let i = 0; i < idSeed.length; i++) {
+      const char = idSeed.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+
+    // 正の数に変換して8文字のIDを生成
+    const positiveHash = Math.abs(hash);
+    return positiveHash.toString(36).substring(0, 8).toUpperCase();
   };
 
   /**
    * 日時を2ch風フォーマットに変換
    */
-  const formatDateTime = (date: Date): string => {
+  const formatDateTime = (authorName: string, date: Date): string => {
     const d = new Date(date);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -54,7 +68,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
     const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
     const weekDay = weekDays[d.getDay()];
 
-    const postId = generatePostId(d);
+    const postId = generatePostId(authorName, d);
 
     return `${year}/${month}/${day}(${weekDay}) ${hour}:${minute}:${second}.${String(d.getMilliseconds()).padStart(3, '0')} ID:${postId}`;
   };
@@ -132,7 +146,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
             {/* 投稿ヘッダー */}
             <div class="post-header">
               <span class="post-number">{post.number}</span> :{renderName(post)} :
-              <span class="post-date">{formatDateTime(post.createdAt)}</span>
+              <span class="post-date">{formatDateTime(post.authorName, post.createdAt)}</span>
             </div>
 
             {/* 投稿内容 */}

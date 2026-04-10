@@ -194,6 +194,17 @@ export function createThreadsRouter(
       // スレッドと初回投稿を同時作成
       const thread = await threadManager.createThread(title, content, name || '名無しさん');
 
+      // 初回投稿を取得（AIレスポンス生成用）
+      const posts = await postManager.getPostsByThread(thread.id);
+      const firstPost = posts[0]; // post_number = 1
+
+      // AIレス生成を非同期で開始（エラーが発生してもスレッド作成は成功とする）
+      if (firstPost) {
+        responseGenerator.generateResponses(thread.id, firstPost, []).catch((error) => {
+          console.error('[ERROR] Failed to generate AI responses for new thread:', error);
+        });
+      }
+
       // スレッド詳細にリダイレクト
       return c.redirect(`/threads/${thread.id}`);
     } catch (error) {

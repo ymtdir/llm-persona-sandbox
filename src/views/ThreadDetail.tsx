@@ -44,13 +44,15 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
     let hash = 0;
     for (let i = 0; i < idSeed.length; i++) {
       const char = idSeed.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
 
     // 正の数に変換して8文字のIDを生成
     const positiveHash = Math.abs(hash);
-    return positiveHash.toString(36).substring(0, 8).toUpperCase();
+    const generatedId = positiveHash.toString(36).substring(0, 8).toUpperCase();
+
+    return generatedId;
   };
 
   /**
@@ -146,7 +148,9 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
             {/* 投稿ヘッダー */}
             <div class="post-header">
               <span class="post-number">{post.number}</span> :{renderName(post)} :
-              <span class="post-date">{formatDateTime(post.authorName, post.createdAt)}</span>
+              <span class="post-date">
+                {formatDateTime(post.name || '名無しさん', post.createdAt)}
+              </span>
             </div>
 
             {/* 投稿内容 */}

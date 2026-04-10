@@ -45,11 +45,7 @@ export class GroqClient implements LLMClient {
   private baseUrl: string;
   private timeout: number;
 
-  constructor(
-    apiKey: string,
-    baseUrl: string = GROQ_BASE_URL,
-    timeout: number = REQUEST_TIMEOUT
-  ) {
+  constructor(apiKey: string, baseUrl: string = GROQ_BASE_URL, timeout: number = REQUEST_TIMEOUT) {
     if (!apiKey) {
       throw new Error('Groq API key is required');
     }
@@ -70,11 +66,7 @@ export class GroqClient implements LLMClient {
    * @returns 生成されたレスポンス
    * @throws {Error} 接続エラー、認証エラー、レート制限エラー等
    */
-  async chat(
-    model: string,
-    messages: ChatMessage[],
-    options?: ChatOptions
-  ): Promise<ChatResponse> {
+  async chat(model: string, messages: ChatMessage[], options?: ChatOptions): Promise<ChatResponse> {
     const url = `${this.baseUrl}/chat/completions`;
 
     // AbortControllerでタイムアウトを実装
@@ -138,7 +130,7 @@ export class GroqClient implements LLMClient {
         throw new Error(errorMessage);
       }
 
-      const data: GroqChatResponse = await response.json();
+      const data = (await response.json()) as GroqChatResponse;
 
       const duration = Date.now() - startTime;
 

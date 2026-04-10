@@ -9,14 +9,21 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=${PORT}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - DATABASE_URL=${DATABASE_URL}
     depends_on:
       - db
-      - ollama
+      # Ollamaを使用する場合は以下のコメントを外してください
+      # - ollama
     restart: unless-stopped
 
+  # Ollamaサービス（オプション）
+  # LLM_PROVIDER=ollamaを使用する場合のみ必要
+  # 使用する場合はappサービスのdepends_onのコメントも外してください
   ollama:
     image: ollama/ollama:latest
     volumes:
@@ -28,6 +35,8 @@ services:
         limits:
           memory: 8g
     restart: unless-stopped
+    profiles:
+      - ollama
 
   db:
     image: postgres:17

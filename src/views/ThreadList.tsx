@@ -70,17 +70,13 @@ export const ThreadList: FC<ThreadListProps> = ({ threads }) => {
       {/* スレッド一覧 */}
       <div class="thread-list">
         {threads.length === 0 ? (
-          <div style="padding: 20px; text-align: center; color: #666666;">
-            スレッドがありません
-          </div>
+          <div style="padding: 20px; text-align: center; color: #666666;">スレッドがありません</div>
         ) : (
           threads.map((thread, index) => (
             <div class="thread-item">
               <div style="display: flex; align-items: baseline;">
                 {/* スレッド番号 */}
-                <span style="color: #666666; margin-right: 8px;">
-                  {index + 1}:
-                </span>
+                <span style="color: #666666; margin-right: 8px;">{index + 1}:</span>
 
                 {/* 勢い表示 */}
                 <span style="margin-right: 8px;" title="スレッドの勢い">
@@ -88,18 +84,12 @@ export const ThreadList: FC<ThreadListProps> = ({ threads }) => {
                 </span>
 
                 {/* スレッドタイトル */}
-                <a
-                  href={`/threads/${thread.id}`}
-                  class="thread-title"
-                  style="flex-grow: 1;"
-                >
+                <a href={`/threads/${thread.id}`} class="thread-title" style="flex-grow: 1;">
                   {thread.title}
                 </a>
 
                 {/* レス数 */}
-                <span style="color: #ff0000; margin-left: 8px;">
-                  ({thread.resCount})
-                </span>
+                <span style="color: #ff0000; margin-left: 8px;">({thread.resCount})</span>
               </div>
 
               {/* メタ情報 */}
@@ -134,9 +124,7 @@ export const ThreadList: FC<ThreadListProps> = ({ threads }) => {
             <li>↓: 過疎（10レス/時未満）</li>
             <li>新: 作成から1時間以内</li>
           </ul>
-          <p style="margin-top: 10px;">
-            ※ 1000レスに到達したスレッドは書き込みができません
-          </p>
+          <p style="margin-top: 10px;">※ 1000レスに到達したスレッドは書き込みができません</p>
         </div>
       </div>
     </div>

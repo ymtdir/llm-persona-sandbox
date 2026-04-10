@@ -13,7 +13,12 @@ export const createThreadSchema = z.object({
   // 将来的に以下のいずれかの実装が必要:
   // 1. postsテーブルにemail列を追加してmailtoリンク機能を実装
   // 2. sage機能（emailに"sage"を入力するとスレッドを上げない）の実装
-  email: z.string().email('正しいメールアドレスを入力してください').max(64).optional().or(z.literal('')),
+  email: z
+    .string()
+    .email('正しいメールアドレスを入力してください')
+    .max(64)
+    .optional()
+    .or(z.literal('')),
   content: z
     .string()
     .min(1, '内容は1文字以上入力してください')
@@ -29,7 +34,12 @@ export const createPostSchema = z.object({
   // 将来的に以下のいずれかの実装が必要:
   // 1. postsテーブルにemail列を追加してmailtoリンク機能を実装
   // 2. sage機能（emailに"sage"を入力するとスレッドを上げない）の実装
-  email: z.string().email('正しいメールアドレスを入力してください').max(64).optional().or(z.literal('')),
+  email: z
+    .string()
+    .email('正しいメールアドレスを入力してください')
+    .max(64)
+    .optional()
+    .or(z.literal('')),
   content: z
     .string()
     .min(1, '内容は1文字以上入力してください')

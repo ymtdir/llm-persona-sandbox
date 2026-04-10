@@ -1,19 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ResponseGenerator } from '../../src/services/responseGenerator';
 import { CharacterSelector } from '../../src/services/characterSelector';
-import { OllamaClient } from '../../src/services/ollamaClient';
+import type { LLMClient } from '../../src/services/llmClient';
 import { PostManager } from '../../src/services/postManager';
 import type { Character, Post, ChatResponse } from '../../src/types';
 
 // モックの作成
 vi.mock('../../src/services/characterSelector');
-vi.mock('../../src/services/ollamaClient');
 vi.mock('../../src/services/postManager');
 
 describe('ResponseGenerator', () => {
   let responseGenerator: ResponseGenerator;
   let mockCharacterSelector: CharacterSelector;
-  let mockOllamaClient: OllamaClient;
+  let mockLLMClient: LLMClient;
   let mockPostManager: PostManager;
 
   const testCharacters: Character[] = [
@@ -82,13 +81,16 @@ describe('ResponseGenerator', () => {
 
     // モックインスタンスの作成
     mockCharacterSelector = new CharacterSelector();
-    mockOllamaClient = new OllamaClient();
+    mockLLMClient = {
+      chat: vi.fn(),
+      healthCheck: vi.fn(),
+    };
     mockPostManager = new PostManager({} as any);
 
     // ResponseGeneratorインスタンスの作成
     responseGenerator = new ResponseGenerator(
       mockCharacterSelector,
-      mockOllamaClient,
+      mockLLMClient,
       mockPostManager
     );
   });
@@ -101,7 +103,7 @@ describe('ResponseGenerator', () => {
         testCharacters[1],
       ]);
 
-      // Ollama APIレスポンスのモック
+      // LLM APIレスポンスのモック
       const mockResponse: ChatResponse = {
         message: {
           role: 'assistant',
@@ -109,7 +111,7 @@ describe('ResponseGenerator', () => {
         },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      (mockLLMClient.chat as any).mockResolvedValue(mockResponse);
 
       // レス保存のモック（2回呼ばれるので2つの値を返す）
       const createPostSpy = vi.spyOn(mockPostManager, 'createPost');
@@ -150,7 +152,7 @@ describe('ResponseGenerator', () => {
       );
 
       // Ollama APIが2回呼ばれたことを確認
-      expect(mockOllamaClient.chat).toHaveBeenCalledTimes(2);
+      expect(mockLLMClient.chat).toHaveBeenCalledTimes(2);
 
       // レス保存が2回呼ばれたことを確認
       expect(mockPostManager.createPost).toHaveBeenCalledTimes(2);
@@ -172,7 +174,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -189,7 +191,7 @@ describe('ResponseGenerator', () => {
       await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
       // Ollama API呼び出しの引数を確認
-      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+      expect(mockLLMClient.chat).toHaveBeenCalledWith(
         expect.any(String),
         expect.arrayContaining([
           expect.objectContaining({
@@ -217,7 +219,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -234,7 +236,7 @@ describe('ResponseGenerator', () => {
       await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
       // User Promptにスレッド履歴が含まれることを確認
-      const chatCall = vi.mocked(mockOllamaClient.chat).mock.calls[0];
+      const chatCall = vi.mocked(mockLLMClient.chat).mock.calls[0];
       const userMessage = chatCall[1].find((m) => m.role === 'user');
 
       expect(userMessage?.content).toContain('1: 名無しさん: 最初の投稿です');
@@ -249,7 +251,7 @@ describe('ResponseGenerator', () => {
       ]);
 
       // 1つ目のキャラクターはエラー、2つ目は成功
-      vi.spyOn(mockOllamaClient, 'chat')
+      vi.spyOn(mockLLMClient, 'chat')
         .mockRejectedValueOnce(new Error('Ollama API error'))
         .mockResolvedValueOnce({
           message: { role: 'assistant', content: 'レスです' },
@@ -288,7 +290,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -305,7 +307,7 @@ describe('ResponseGenerator', () => {
       await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
       // ChatOptionsを確認
-      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+      expect(mockLLMClient.chat).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Array),
         expect.objectContaining({
@@ -324,7 +326,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: '  生成されたレス内容  ' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -372,7 +374,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 31,
@@ -389,7 +391,7 @@ describe('ResponseGenerator', () => {
       await responseGenerator.generateResponses('thread-1', testUserPost, longHistory);
 
       // User Promptに最新20件のみが含まれることを確認
-      const chatCall = vi.mocked(mockOllamaClient.chat).mock.calls[0];
+      const chatCall = vi.mocked(mockLLMClient.chat).mock.calls[0];
       const userMessage = chatCall[1].find((m) => m.role === 'user');
 
       // 11-30の20件のみが含まれる
@@ -409,7 +411,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -425,7 +427,7 @@ describe('ResponseGenerator', () => {
 
       await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
-      const chatCall = vi.mocked(mockOllamaClient.chat).mock.calls[0];
+      const chatCall = vi.mocked(mockLLMClient.chat).mock.calls[0];
       const systemMessage = chatCall[1].find((m) => m.role === 'system');
 
       // System Promptの構造を確認
@@ -450,7 +452,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -466,7 +468,7 @@ describe('ResponseGenerator', () => {
 
       await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
-      const chatCall = vi.mocked(mockOllamaClient.chat).mock.calls[0];
+      const chatCall = vi.mocked(mockLLMClient.chat).mock.calls[0];
       const userMessage = chatCall[1].find((m) => m.role === 'user');
 
       // User Promptの構造を確認
@@ -508,7 +510,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -550,7 +552,7 @@ describe('ResponseGenerator', () => {
     it('should use custom model when provided', async () => {
       const customGenerator = new ResponseGenerator(
         mockCharacterSelector,
-        mockOllamaClient,
+        mockLLMClient,
         mockPostManager,
         { model: 'custom-model:13b' }
       );
@@ -563,7 +565,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -580,7 +582,7 @@ describe('ResponseGenerator', () => {
       await customGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
       // カスタムモデルが使用されることを確認
-      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+      expect(mockLLMClient.chat).toHaveBeenCalledWith(
         'custom-model:13b',
         expect.any(Array),
         expect.any(Object)
@@ -590,7 +592,7 @@ describe('ResponseGenerator', () => {
     it('should use custom numPredict when provided', async () => {
       const customGenerator = new ResponseGenerator(
         mockCharacterSelector,
-        mockOllamaClient,
+        mockLLMClient,
         mockPostManager,
         { numPredict: 500 }
       );
@@ -603,7 +605,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -620,7 +622,7 @@ describe('ResponseGenerator', () => {
       await customGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
       // カスタムnum_predictが使用されることを確認
-      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
+      expect(mockLLMClient.chat).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Array),
         expect.objectContaining({
@@ -645,7 +647,7 @@ describe('ResponseGenerator', () => {
 
       const customGenerator = new ResponseGenerator(
         mockCharacterSelector,
-        mockOllamaClient,
+        mockLLMClient,
         mockPostManager,
         { maxHistoryLength: 10 }
       );
@@ -658,7 +660,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 31,
@@ -675,7 +677,7 @@ describe('ResponseGenerator', () => {
       await customGenerator.generateResponses('thread-1', testUserPost, longHistory);
 
       // User Promptに最新10件のみが含まれることを確認
-      const chatCall = vi.mocked(mockOllamaClient.chat).mock.calls[0];
+      const chatCall = vi.mocked(mockLLMClient.chat).mock.calls[0];
       const userMessage = chatCall[1].find((m) => m.role === 'user');
 
       // 21-30の10件のみが含まれる
@@ -694,7 +696,7 @@ describe('ResponseGenerator', () => {
         message: { role: 'assistant', content: 'レスです' },
         done: true,
       };
-      vi.spyOn(mockOllamaClient, 'chat').mockResolvedValue(mockResponse);
+      vi.spyOn(mockLLMClient, 'chat').mockResolvedValue(mockResponse);
 
       vi.spyOn(mockPostManager, 'createPost').mockResolvedValue({
         id: 4,
@@ -711,8 +713,8 @@ describe('ResponseGenerator', () => {
       await responseGenerator.generateResponses('thread-1', testUserPost, testThreadHistory);
 
       // デフォルト値が使用されることを確認
-      expect(mockOllamaClient.chat).toHaveBeenCalledWith(
-        expect.stringMatching(/llama3\.1:8b|.*:/), // デフォルトまたは環境変数
+      expect(mockLLMClient.chat).toHaveBeenCalledWith(
+        'llama-3.3-70b-versatile', // Groqデフォルトモデル
         expect.any(Array),
         expect.objectContaining({
           num_predict: 200, // デフォルト値

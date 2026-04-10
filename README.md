@@ -9,7 +9,7 @@
 ## 技術スタック
 
 - **フレームワーク**: Hono (TypeScript)
-- **LLMサーバー**: Ollama (llama3.1:8b)
+- **LLMプロバイダー**: Groq API
 - **データベース**: PostgreSQL 17
 - **インフラ**: Docker Compose
 
@@ -19,7 +19,7 @@
 
 - Docker Engine 24.x以上
 - Docker Compose 2.x以上
-- メモリ: 16GB以上推奨
+- Groq APIキー（[こちら](https://console.groq.com/)から取得）
 
 ### セットアップ手順
 
@@ -36,7 +36,12 @@ cd llm-persona-sandbox
 cp .env.example .env
 ```
 
-必要に応じて `.env` ファイルを編集してください。
+`.env` ファイルを編集して、Groq APIキーを設定します:
+
+```bash
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile  # オプション（デフォルト値）
+```
 
 3. **Docker Composeで起動**
 
@@ -65,8 +70,17 @@ curl http://localhost:3000/health
 ## サービス構成
 
 - **app**: Node.js 20 + Hono + TypeScript (ポート: 3000)
-- **ollama**: Ollama LLMサーバー (内部ポート: 11434)
 - **db**: PostgreSQL 17 (内部ポート: 5432)
+
+## Groq API
+
+このプロジェクトはGroq APIを使用してAIレスポンスを生成します。
+
+- **高速なレスポンス**: クラウドベースの推論エンジン
+- **高品質なAI生成**: llama-3.3-70bモデル使用
+- **低リソース要件**: ローカルGPU不要
+- **簡単なセットアップ**: APIキーのみで利用可能
+- **無料枠**: 30リクエスト/分
 
 ## 開発コマンド
 

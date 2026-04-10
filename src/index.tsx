@@ -8,7 +8,7 @@ import { ThreadManager } from './services/threadManager';
 import { PostManager } from './services/postManager';
 import { ResponseGenerator } from './services/responseGenerator';
 import { CharacterSelector } from './services/characterSelector';
-import { OllamaClient } from './services/ollamaClient';
+import { createLLMClient } from './services/llmClientFactory';
 
 /**
  * Honoアプリケーション
@@ -48,8 +48,8 @@ const db = new DatabaseClient();
 const threadManager = new ThreadManager(db);
 const postManager = new PostManager(db);
 const characterSelector = new CharacterSelector();
-const ollamaClient = new OllamaClient();
-const responseGenerator = new ResponseGenerator(characterSelector, ollamaClient, postManager);
+const llmClient = createLLMClient();
+const responseGenerator = new ResponseGenerator(characterSelector, llmClient, postManager);
 
 /**
  * ルート定義

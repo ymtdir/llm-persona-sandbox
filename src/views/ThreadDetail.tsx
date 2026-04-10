@@ -29,20 +29,36 @@ interface ThreadDetailProps {
  */
 export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) => {
   /**
-   * 投稿IDを生成（日付ベースの簡易ID）
+   * 投稿IDを生成（投稿者名と日付ベースの一貫したID）
+   * 同じ投稿者は同じ日に同じIDを持つ（2ch風）
    */
-  const generatePostId = (date: Date): string => {
+  const generatePostId = (authorName: string, date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const idSeed = `${year}${month}${day}${Math.floor(Math.random() * 10000)}`;
-    return btoa(idSeed).substring(0, 8);
+
+    // 投稿者名と日付を組み合わせてハッシュを生成
+    const idSeed = `${authorName}${year}${month}${day}`;
+
+    // 簡易的なハッシュ関数
+    let hash = 0;
+    for (let i = 0; i < idSeed.length; i++) {
+      const char = idSeed.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+
+    // 正の数に変換して8文字のIDを生成
+    const positiveHash = Math.abs(hash);
+    const generatedId = positiveHash.toString(36).substring(0, 8).toUpperCase();
+
+    return generatedId;
   };
 
   /**
    * 日時を2ch風フォーマットに変換
    */
-  const formatDateTime = (date: Date): string => {
+  const formatDateTime = (authorName: string, date: Date): string => {
     const d = new Date(date);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -54,7 +70,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
     const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
     const weekDay = weekDays[d.getDay()];
 
-    const postId = generatePostId(d);
+    const postId = generatePostId(authorName, d);
 
     return `${year}/${month}/${day}(${weekDay}) ${hour}:${minute}:${second}.${String(d.getMilliseconds()).padStart(3, '0')} ID:${postId}`;
   };
@@ -85,10 +101,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
       // アンカーリンク
       const postNumber = match[1];
       parts.push(
-        <a
-          href={`#post-${postNumber}`}
-          class="post-anchor"
-        >
+        <a href={`#post-${postNumber}`} class="post-anchor">
           &gt;&gt;{postNumber}
         </a>
       );
@@ -112,11 +125,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
 
     if (post.email) {
       return (
-        <a
-          href={`mailto:${post.email}`}
-          class="post-name"
-          style="text-decoration: none;"
-        >
+        <a href={`mailto:${post.email}`} class="post-name" style="text-decoration: none;">
           {displayName}
         </a>
       );
@@ -138,17 +147,14 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
           <div class="post" id={`post-${post.number}`}>
             {/* 投稿ヘッダー */}
             <div class="post-header">
-              <span class="post-number">{post.number}</span>
-              {' '}:
-              {renderName(post)}
-              {' '}:
-              <span class="post-date">{formatDateTime(post.createdAt)}</span>
+              <span class="post-number">{post.number}</span> :{renderName(post)} :
+              <span class="post-date">
+                {formatDateTime(post.name || '名無しさん', post.createdAt)}
+              </span>
             </div>
 
             {/* 投稿内容 */}
-            <div class="post-content">
-              {renderContent(post.content)}
-            </div>
+            <div class="post-content">{renderContent(post.content)}</div>
           </div>
         ))}
       </div>
@@ -156,41 +162,33 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
       {/* レス投稿フォーム */}
       {!thread.isLocked && thread.posts.length < 1000 ? (
         <div class="post-form">
-          <h3 style="font-size: 14px; margin-bottom: 10px; font-weight: bold;">
-            レスを投稿する
-          </h3>
+          <h3 style="font-size: 14px; margin-bottom: 10px; font-weight: bold;">レスを投稿する</h3>
           <form
             action={`/threads/${thread.id}/posts`}
             method="post"
-            onsubmit={onSubmitPost ? `event.preventDefault(); ${onSubmitPost.toString()}(this);` : undefined}
+            onsubmit={
+              onSubmitPost ? `event.preventDefault(); ${onSubmitPost.toString()}(this);` : undefined
+            }
           >
             <div class="form-group">
-              <label htmlFor="name" class="form-label">名前:</label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                placeholder="名無しさん"
-                maxlength={64}
-              />
+              <label htmlFor="name" class="form-label">
+                名前:
+              </label>
+              <input type="text" id="name" name="name" placeholder="名無しさん" maxlength={64} />
             </div>
 
             <div class="form-group">
-              <label htmlFor="email" class="form-label">E-mail:</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                placeholder="sage"
-                maxlength={64}
-              />
-              <span style="margin-left: 10px; font-size: 12px; color: #666666;">
-                (省略可)
-              </span>
+              <label htmlFor="email" class="form-label">
+                E-mail:
+              </label>
+              <input type="email" id="email" name="email" placeholder="sage" maxlength={64} />
+              <span style="margin-left: 10px; font-size: 12px; color: #666666;">(省略可)</span>
             </div>
 
             <div class="form-group">
-              <label htmlFor="content" class="form-label">内容:</label>
+              <label htmlFor="content" class="form-label">
+                内容:
+              </label>
               <textarea
                 id="content"
                 name="content"
@@ -202,9 +200,7 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
 
             <div class="form-group">
               <label class="form-label"></label>
-              <button type="submit">
-                書き込む
-              </button>
+              <button type="submit">書き込む</button>
               <span style="margin-left: 10px; font-size: 12px; color: #666666;">
                 残り{1000 - thread.posts.length}レス
               </span>
@@ -233,10 +229,18 @@ export const ThreadDetail: FC<ThreadDetailProps> = ({ thread, onSubmitPost }) =>
 
       {/* スレッド操作メニュー */}
       <div style="margin-top: 20px; text-align: center;">
-        <a href="/threads" style="margin: 0 10px;">スレッド一覧に戻る</a>
-        <a href={`/threads/${thread.id}`} style="margin: 0 10px;">リロード</a>
-        <a href="#post-1" style="margin: 0 10px;">▲トップ</a>
-        <a href="#post-form" style="margin: 0 10px;">▼レス投稿</a>
+        <a href="/threads" style="margin: 0 10px;">
+          スレッド一覧に戻る
+        </a>
+        <a href={`/threads/${thread.id}`} style="margin: 0 10px;">
+          リロード
+        </a>
+        <a href="#post-1" style="margin: 0 10px;">
+          ▲トップ
+        </a>
+        <a href="#post-form" style="margin: 0 10px;">
+          ▼レス投稿
+        </a>
       </div>
     </div>
   );

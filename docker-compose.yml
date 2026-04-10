@@ -9,24 +9,11 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=${PORT}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
       - DATABASE_URL=${DATABASE_URL}
     depends_on:
       - db
-      - ollama
-    restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama-data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0:11434
-    deploy:
-      resources:
-        limits:
-          memory: 8g
     restart: unless-stopped
 
   db:
@@ -45,5 +32,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  ollama-data:
   db-data:

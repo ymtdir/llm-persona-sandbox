@@ -62,7 +62,7 @@ describe('LLMClientFactory', () => {
 
       const model = getDefaultModel();
 
-      expect(model).toBe('llama-3.1-70b-versatile');
+      expect(model).toBe('llama-3.3-70b-versatile');
     });
 
     it('should return custom model from environment variable', () => {

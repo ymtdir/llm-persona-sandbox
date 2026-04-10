@@ -52,5 +52,5 @@ export function createLLMClient(config: LLMClientConfig = {}): LLMClient {
  * @returns モデル名
  */
 export function getDefaultModel(): string {
-  return process.env.GROQ_MODEL || 'llama-3.1-70b-versatile';
+  return process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 }

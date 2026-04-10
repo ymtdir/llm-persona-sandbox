@@ -714,7 +714,7 @@ describe('ResponseGenerator', () => {
 
       // デフォルト値が使用されることを確認
       expect(mockLLMClient.chat).toHaveBeenCalledWith(
-        'llama-3.1-70b-versatile', // Groqデフォルトモデル
+        'llama-3.3-70b-versatile', // Groqデフォルトモデル
         expect.any(Array),
         expect.objectContaining({
           num_predict: 200, // デフォルト値

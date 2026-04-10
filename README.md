@@ -40,7 +40,7 @@ cp .env.example .env
 
 ```bash
 GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=llama-3.1-70b-versatile  # オプション（デフォルト値）
+GROQ_MODEL=llama-3.3-70b-versatile  # オプション（デフォルト値）
 ```
 
 3. **Docker Composeで起動**
@@ -77,7 +77,7 @@ curl http://localhost:3000/health
 このプロジェクトはGroq APIを使用してAIレスポンスを生成します。
 
 - **高速なレスポンス**: クラウドベースの推論エンジン
-- **高品質なAI生成**: llama-3.1-70bモデル使用
+- **高品質なAI生成**: llama-3.3-70bモデル使用
 - **低リソース要件**: ローカルGPU不要
 - **簡単なセットアップ**: APIキーのみで利用可能
 - **無料枠**: 30リクエスト/分

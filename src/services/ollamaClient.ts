@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatOptions, ChatResponse } from '../types';
+import type { LLMClient } from './llmClient';
 
 /**
  * Ollama APIベースURL
@@ -17,7 +18,7 @@ const REQUEST_TIMEOUT = 30000; // 30秒
  * Ollama APIへのHTTPリクエスト送信を担当するクライアントクラス。
  * チャット補完リクエスト、エラーハンドリング、レスポンスパースを実装。
  */
-export class OllamaClient {
+export class OllamaClient implements LLMClient {
   private baseUrl: string;
   private timeout: number;
 

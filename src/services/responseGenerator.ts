@@ -1,15 +1,16 @@
 import type { Character, Post, ChatMessage, ChatOptions } from '../types';
 import { CharacterSelector } from './characterSelector';
-import { OllamaClient } from './ollamaClient';
+import type { LLMClient } from './llmClient';
 import { PostManager } from './postManager';
+import { getDefaultModel } from './llmClientFactory';
 
 /**
  * ResponseGeneratorのオプション
  */
 export interface ResponseGeneratorOptions {
   /**
-   * 使用するOllamaモデル名
-   * デフォルト: process.env.OLLAMA_MODEL || 'llama3.1:8b'
+   * 使用するLLMモデル名
+   * デフォルト: プロバイダーに応じた推奨モデル
    */
   model?: string;
 
@@ -30,11 +31,11 @@ export interface ResponseGeneratorOptions {
  * ResponseGenerator
  *
  * AIキャラクターによるレス生成を統括するクラス。
- * キャラクター選択、プロンプト構築、Ollama API呼び出し、レス保存の一連のフローを制御。
+ * キャラクター選択、プロンプト構築、LLM API呼び出し、レス保存の一連のフローを制御。
  */
 export class ResponseGenerator {
   private characterSelector: CharacterSelector;
-  private ollamaClient: OllamaClient;
+  private llmClient: LLMClient;
   private postManager: PostManager;
   private model: string;
   private maxHistoryLength: number;
@@ -42,14 +43,14 @@ export class ResponseGenerator {
 
   constructor(
     characterSelector: CharacterSelector,
-    ollamaClient: OllamaClient,
+    llmClient: LLMClient,
     postManager: PostManager,
     options: ResponseGeneratorOptions = {}
   ) {
     this.characterSelector = characterSelector;
-    this.ollamaClient = ollamaClient;
+    this.llmClient = llmClient;
     this.postManager = postManager;
-    this.model = options.model ?? process.env.OLLAMA_MODEL ?? 'llama3.1:8b';
+    this.model = options.model ?? getDefaultModel();
     this.maxHistoryLength = options.maxHistoryLength ?? 20;
     this.numPredict = options.numPredict ?? 200;
   }
@@ -152,8 +153,8 @@ export class ResponseGenerator {
       num_predict: this.numPredict,
     };
 
-    // Ollama APIへリクエスト
-    const response = await this.ollamaClient.chat(this.model, messages, options);
+    // LLM APIへリクエスト
+    const response = await this.llmClient.chat(this.model, messages, options);
 
     // 生成されたレス内容
     const generatedContent = response.message.content.trim();

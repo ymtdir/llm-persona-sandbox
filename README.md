@@ -9,7 +9,7 @@
 ## 技術スタック
 
 - **フレームワーク**: Hono (TypeScript)
-- **LLMサーバー**: Ollama (llama3.1:8b)
+- **LLMプロバイダー**: Groq API (デフォルト) / Ollama (オプション)
 - **データベース**: PostgreSQL 17
 - **インフラ**: Docker Compose
 
@@ -19,7 +19,8 @@
 
 - Docker Engine 24.x以上
 - Docker Compose 2.x以上
-- メモリ: 16GB以上推奨
+- **Groqを使用する場合（推奨）**: Groq APIキー（[こちら](https://console.groq.com/)から取得）
+- **Ollamaを使用する場合**: メモリ16GB以上推奨
 
 ### セットアップ手順
 
@@ -36,7 +37,25 @@ cd llm-persona-sandbox
 cp .env.example .env
 ```
 
-必要に応じて `.env` ファイルを編集してください。
+`.env` ファイルを編集して、LLMプロバイダーを設定します。
+
+**Groq APIを使用する場合（推奨）:**
+
+```bash
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.1-70b-versatile
+```
+
+**Ollamaを使用する場合:**
+
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_MODEL=llama3.1:8b
+```
+
+また、`docker-compose.yml`のappサービスの`depends_on`にollamaを追加し、profilesを削除してください。
 
 3. **Docker Composeで起動**
 
@@ -65,8 +84,33 @@ curl http://localhost:3000/health
 ## サービス構成
 
 - **app**: Node.js 20 + Hono + TypeScript (ポート: 3000)
-- **ollama**: Ollama LLMサーバー (内部ポート: 11434)
 - **db**: PostgreSQL 17 (内部ポート: 5432)
+- **ollama** (オプション): Ollama LLMサーバー (内部ポート: 11434)
+  - LLM_PROVIDER=ollamaの場合のみ必要
+
+## LLMプロバイダー
+
+### Groq API（推奨）
+
+- **利点**:
+  - 高速なレスポンス（Ollamaの数倍〜10倍高速）
+  - 高品質なAI生成（llama-3.1-70bモデル使用）
+  - 低メモリ使用量（Ollamaの4-8GB不要）
+  - 簡単なセットアップ（APIキーのみ）
+- **欠点**:
+  - インターネット接続が必要
+  - API利用制限あり（無料枠: 30リクエスト/分）
+
+### Ollama（オプション）
+
+- **利点**:
+  - オフライン動作可能
+  - プライバシー重視（ローカル実行）
+  - カスタムモデル使用可能
+- **欠点**:
+  - 4-8GBのメモリ使用
+  - レスポンスが遅い（特にCPU環境）
+  - セットアップがやや複雑
 
 ## 開発コマンド
 

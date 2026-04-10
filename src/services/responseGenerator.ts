@@ -159,12 +159,9 @@ export class ResponseGenerator {
     // 生成されたレス内容
     const generatedContent = response.message.content.trim();
 
-    console.log(
-      `[INFO] ResponseGenerator: Generated response for ${character.displayName}`,
-      {
-        contentLength: generatedContent.length,
-      }
-    );
+    console.log(`[INFO] ResponseGenerator: Generated response for ${character.displayName}`, {
+      contentLength: generatedContent.length,
+    });
 
     // レスをDBに保存
     const post = await this.postManager.createPost({

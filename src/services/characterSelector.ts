@@ -65,11 +65,7 @@ export class CharacterSelector {
    * @param maxCount - 最大選択数
    * @returns 選択されたキャラクター配列
    */
-  selectByKeywords(
-    userPost: string,
-    minCount: number = 2,
-    maxCount: number = 5
-  ): Character[] {
+  selectByKeywords(userPost: string, minCount: number = 2, maxCount: number = 5): Character[] {
     // 全キャラクターのスコアを計算
     const scores: CharacterScore[] = this.characters.map((character) => {
       const keywordScore = this.calculateKeywordScore(userPost, character);

@@ -15,11 +15,7 @@ export interface LLMClient {
    * @returns 生成されたレスポンス
    * @throws {Error} 接続エラー、タイムアウト、認証エラー等
    */
-  chat(
-    model: string,
-    messages: ChatMessage[],
-    options?: ChatOptions
-  ): Promise<ChatResponse>;
+  chat(model: string, messages: ChatMessage[], options?: ChatOptions): Promise<ChatResponse>;
 
   /**
    * ヘルスチェック（オプション）
